@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kinetic Keyboard</string>
+    <string name="ime_label">Kinetic Keyboard</string>
+
+    <string name="subtype_bangla_unijoy">বাংলা (ইউনিজয়)</string>
+    <string name="subtype_bangla_phonetic">বাংলা (ফোনেটিক)</string>
+    <string name="subtype_english">English</string>
+
+    <string name="setup_title">Kinetic Keyboard</string>
+    <string name="setup_step_1">1. Enable Kinetic Keyboard in system settings.</string>
+    <string name="setup_step_2">2. Switch to it using the input-method picker.</string>
+    <string name="setup_step_3">3. Tap any text field and start typing.</string>
+    <string name="setup_enable">Enable in Settings</string>
+    <string name="setup_choose">Choose Keyboard</string>
+    <string name="setup_test_hint">Test field — type here</string>
+</resources>
