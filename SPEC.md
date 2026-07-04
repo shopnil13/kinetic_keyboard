@@ -309,9 +309,9 @@ This is the single source of truth for build progress. Every unit of work is a t
 ### 10.1 Milestone dashboard
 | Phase | Milestone | Est. | Status | Gate |
 |-------|-----------|------|--------|------|
-| P0 | Scaffold & IME plumbing | 1–2 d | 🟡 code written, pending build | Keyboard appears in picker, types 1 char on device |
-| P1 | Exact 4-layer layout rendering | 1–1.5 wk | 🔴 | All layers match photos, type correct Unicode |
-| P2 | Bengali correctness core | 1 wk | 🔴 | Golden corpus passes; cluster backspace works |
+| P0 | Scaffold & IME plumbing | 1–2 d | 🟢 done (verified in Android Studio) | Keyboard appears in picker, types 1 char on device |
+| P1 | Exact 4-layer layout rendering | 1–1.5 wk | 🟡 code written; on-device QA pending | All layers match photos, type correct Unicode |
+| P2 | Bengali correctness core | 1 wk | 🟡 code + tests green; on-device QA pending | Golden corpus passes; cluster backspace works |
 | P3 | Banglish phonetic (port) | 1–2 wk | 🔴 | Kotlin output == Java reference on word list |
 | P4 | Suggestions / prediction / autocorrect | 2 wk | 🔴 | Relevant suggestions in all 3 modes |
 | P5 | Parity polish (themes, emoji, settings, …) | ongoing | 🔴 | P1.2 feature set complete |
@@ -324,38 +324,38 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 ### P0 — Project scaffold & IME plumbing
 *Goal: prove the riskiest infra (Compose inside an IME) end-to-end before building features.*
 
-- [~] **P0.1** Create Android Studio project — Kotlin, Compose, Gradle KTS, minSdk 28, `com.kinetic.keyboard`. *Files written (`settings.gradle.kts`, `build.gradle.kts`, `app/`); DoD: builds & installs — pending SDK machine.*
-- [~] **P0.2** Add dependencies — version catalog `gradle/libs.versions.toml` (Compose BOM, Material 3, DataStore, lifecycle, savedstate, test libs). *DoD: sync succeeds — pending build.* `deps: P0.1`
+- [x] **P0.1** Create Android Studio project — Kotlin, Compose, Gradle KTS, minSdk 28, `com.kinetic.keyboard`. *Done: builds & runs in Android Studio.*
+- [x] **P0.2** Add dependencies — version catalog `gradle/libs.versions.toml` (Compose BOM, Material 3, DataStore, lifecycle, savedstate, kotlinx-serialization, test libs). *Done: sync green.* `deps: P0.1`
 - [x] **P0.3** Declare the IME — `<service>` with `BIND_INPUT_METHOD` + `res/xml/method.xml` (subtypes bn-unijoy / bn-phonetic / en). *Done: manifest + method.xml written.* `deps: P0.1`
 - [x] **P0.4** `KeyboardImeService : InputMethodService` — `onCreateInputView()` returns a `ComposeView`. *Done.* `deps: P0.3`
 - [x] **P0.5** `ImeLifecycleOwner` — sets `ViewTreeLifecycleOwner`/`ViewModelStoreOwner`/`SavedStateRegistryOwner` on the ComposeView. *Done.* `deps: P0.4`
 - [x] **P0.6** Minimal keyboard composable — placeholder keys commit via `InputConnection`. *Done (`MinimalKeyboard.kt`).* `deps: P0.5`
-- [ ] **P0.7** Manual device/emulator test — enable in picker, switch, type. *DoD: verified on ≥1 device — needs your machine.* `deps: P0.1, P0.6`
+- [x] **P0.7** Manual device/emulator test — enable in picker, switch, type. *Done: verified by user in Android Studio.* `deps: P0.1, P0.6`
 - [ ] **P0.8** CI pipeline — GitHub Actions: build + lint + unit tests on push. *DoD: green run on main.* `deps: P0.2`
 - [~] **P0.9** Repo hygiene — README ✓, `.gitignore` ✓, module layout ✓; LICENSE decision pending (§12 Q4). *DoD: docs present + license chosen.*
 
-**🚦 Gate P0:** keyboard installs, appears in the system picker, and types a character on a physical device. Compose-in-IME confirmed working. *(Blocked on a machine with the Android SDK — see §10.2.)*
+**🚦 Gate P0: ✅ PASSED** — keyboard installs, appears in the system picker, types on device. Compose-in-IME confirmed working.
 
 ---
 
 ### P1 — Exact 4-layer layout rendering
 *Goal: the real photographed keyboard — all four layers — typing correct Unicode. Encode from [reference/EXTRACTED_LAYOUTS.md](reference/EXTRACTED_LAYOUTS.md), the authoritative source.*
 
-- [ ] **P1.1** Data model — `LayoutModel` / `RowModel` / `KeyModel` (id, label, output, longPress[], type, width%, edgeFlags, offset). *DoD: models cover every attribute used in the decoded XML.*
-- [ ] **P1.2** Layout JSON schema (§6) + a build-time validator. *DoD: invalid layout fails the build with a clear error.* `deps: P1.1`
-- [ ] **P1.3** Encode **Layer A** `bn_unijoy_normal.json` from the extracted tables (incl. all popups: `ড→ঢ৩` etc.). *DoD: matches EXTRACTED_LAYOUTS.md exactly; validates.* `deps: P1.2`
-- [ ] **P1.4** Encode **Layer B** `bn_unijoy_shift.json` (incl. conjunct keys র্/্য, ঁ). *DoD: exact match; validates.* `deps: P1.2`
-- [ ] **P1.5** Encode **Layer C/C2** `symbols.json` + `symbols_shift.json` (currency/fraction popups). *DoD: exact match; validates.* `deps: P1.2`
-- [ ] **P1.6** Encode **Layer D** `en_qwerty.json` (long-press digits/symbols). *DoD: exact match; validates.* `deps: P1.2`
-- [ ] **P1.7** `LayoutRepository` — load & parse layout JSON from assets, cache. *DoD: unit test loads all 4 layers.* `deps: P1.3–P1.6`
-- [ ] **P1.8** `KeyboardStateMachine` — active layer, shift (one-shot + double-tap caps-lock), layer/mode switch; exposed as `StateFlow`. *DoD: unit tests for shift & layer transitions.* `deps: P1.7`
-- [ ] **P1.9** Compose render — `KeyboardScreen`/`KeyRow`/`KeyView` honoring proportional `keyWidth`, row offsets, edge gaps, icons. *DoD: renders all 4 layers legibly at common screen sizes.* `deps: P1.8`
-- [ ] **P1.10** `TouchController` — tap dispatch, pressed-state visual, key-preview bubble. *DoD: taps map to correct keys incl. edge keys.* `deps: P1.9`
-- [ ] **P1.11** `PopupController` — long-press popup with multi-char choices, slide-to-select, release-to-commit. *DoD: long-press on `ড` offers ঢ and ৩.* `deps: P1.10`
-- [ ] **P1.12** Special keys — shift, backspace (repeat-on-hold), space (with mode label), enter (action-aware), `?123`/`ABC`/`ALT` switches, danda. *DoD: each behaves per decoded XML.* `deps: P1.10`
-- [ ] **P1.13** Wire to `InputConnection` — commit char/popup output, delete. Bangla fixed = table lookup only (correctness deferred to P2). *DoD: all keys type in a real field.* `deps: P1.11, P1.12`
-- [ ] **P1.14** Latency benchmark + **UI-stack decision gate** — measure key-press latency; if Compose is too slow, switch key grid to `AndroidView`/custom View (architecture allows it). *DoD: recorded numbers + written decision.* `deps: P1.13`
-- [ ] **P1.15** Visual QA vs. original photos — side-by-side for all 4 layers. *DoD: sign-off checklist stored in `reference/qa/`.* `deps: P1.13`
+- [x] **P1.1** Data model — `LayoutDef`/`RowDef`/`KeyDef` (`engine/model/LayoutModels.kt`): type, label, output, popup[], width%, gap, target. *Done.*
+- [x] **P1.2** JSON schema + validator — kotlinx.serialization strict parse + `LayoutParser.validate()` (structure, widths ≤100%, known types, targets). *Done; enforced by unit tests.* `deps: P1.1`
+- [x] **P1.3** Layer A `assets/layouts/bn_unijoy.json` — all popups (`ড→ঢ,৩`…), ্র conjunct key, danda. *Done.* `deps: P1.2`
+- [x] **P1.4** Layer B `bn_unijoy_shift.json` — র্ reph, ্য ya-phola, ঁ, ঈ/ঊ popups. *Done.* `deps: P1.2`
+- [x] **P1.5** Layers C/C2 `symbols.json` + `symbols_shift.json` — fractions, currency (`$→¢£৳€¥₣₤₱`), ALT page. *Done.* `deps: P1.2`
+- [x] **P1.6** Layer D `en_qwerty.json` — long-press digits/symbols per `alternates_for_*`. *Done.* `deps: P1.2`
+- [x] **P1.7** `LayoutRepository` — asset load + cache; parser is pure-JVM for testability. *Done.* `deps: P1.3–P1.6`
+- [x] **P1.8** `KeyboardStateMachine` — layer/shift/language via `StateFlow`; one-shot shift, double-tap caps-lock. *Done (dedicated unit tests still worth adding).* `deps: P1.7`
+- [x] **P1.9** Compose render — `KeyboardScreen` with weight-based widths, row gaps (5% offsets), hint superscripts. *Done.* `deps: P1.8`
+- [x] **P1.10** Touch — tap dispatch, pressed highlight. *Done (in `KeyView` gestures).* `deps: P1.9`
+- [~] **P1.11** Popups — long-press opens multi-char popup, tap-to-commit. *Done; slide-to-select refinement pending.* `deps: P1.10`
+- [x] **P1.12** Special keys — shift (one-shot/lock), backspace repeat-on-hold, space (label + swipe = language cycle), action-aware enter, `?123`/`ABC`/`ALT`, danda, tab. *Done.* `deps: P1.10`
+- [x] **P1.13** Wired to `InputConnection` in `KeyboardImeService.handleAction`. *Done.* `deps: P1.11, P1.12`
+- [ ] **P1.14** Latency benchmark + UI-stack decision — measure; fall back to custom View if needed. *DoD: recorded numbers + decision.* `deps: P1.13`
+- [ ] **P1.15** Visual QA vs. original photos — side-by-side all layers on device. *DoD: sign-off; fixes filed.* `deps: P1.13`
 
 **🚦 Gate P1:** all four layers render faithfully to the photos, every key/popup types its correct Unicode, and shift/layer switching works on device.
 
@@ -364,16 +364,16 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 ### P2 — Bengali correctness core
 *Goal: output is always valid, normalized Bengali; editing respects grapheme clusters. See §3.*
 
-- [ ] **P2.1** `GraphemeUtils` — cluster segmentation via ICU `BreakIterator` (Bengali locale). *DoD: unit tests over ক্ত, কি, র্ক, ক্ষ্ম, etc.*
-- [ ] **P2.2** Grapheme-aware backspace — delete whole cluster; long-press = fine (code-point) delete. *DoD: backspace on কি removes both code points.* `deps: P2.1`
-- [ ] **P2.3** NFC normalization on commit. *DoD: decomposed input normalizes to canonical NFC.*
-- [ ] **P2.4** `BanglaTextValidator` — block/repair illegal sequences (double vowel-sign, leading hasanta, etc.). *DoD: rule table + tests.*
-- [ ] **P2.5** Hasanta (`্`) + ZWJ/ZWNJ long-press affordance (force/break ligature). *DoD: can produce both ক্ট and ক্‌ট.* `deps: P2.1`
-- [ ] **P2.6** Special conjunct keys — r-phola (−565), reph (−588), ya-phola (−564) emit correct ZWJ+hasanta sequences. *DoD: golden test for each.* `deps: P2.5`
-- [ ] **P2.7** Cursor movement respects clusters (arrow/selection). *DoD: caret never lands mid-cluster.* `deps: P2.1`
-- [ ] **P2.8** Golden-file corpus — `input → expected NFC` for fixed-layout typing; run in CI. *DoD: ≥200 cases green.* `deps: P2.2–P2.6`
+- [x] **P2.1** `BengaliText` cluster segmentation — purpose-built backward scanner (virama chains, nukta, joiners) instead of ICU: JVM-testable, deterministic, typing-tuned. *Done + golden tests.*
+- [x] **P2.2** Grapheme-aware backspace — one press deletes a full cluster (শক্তি → শ in two presses); selection-aware. *Done (`handleDelete`). Deviation: repeat-on-hold also deletes clusters (predictable), not code points.* `deps: P2.1`
+- [x] **P2.3** NFC normalization on commit (in `BanglaTextValidator.process`). *Done + test.*
+- [x] **P2.4** `BanglaTextValidator` — permissive policy with repairs: double vowel-sign → replace, sign-after-hasanta → replace, no double hasanta. *Done + tests.*
+- [x] **P2.5** Hasanta long-press → explicit ্+ZWNJ (break ligature) and ্+ZWJ (force) variants. *Done (popup on ্).* `deps: P2.1`
+- [x] **P2.6** Conjunct keys ্র / র্ / ্য verified end-to-end (ক+্র→ক্র, র্+ক→র্ক). *Done: golden tests.* `deps: P2.5`
+- [ ] **P2.7** Cursor movement respects clusters. *Partially N/A — layout has no arrow keys; app-side taps control the caret. Revisit if cursor keys are added (P5).* `deps: P2.1`
+- [~] **P2.8** Golden corpus — ~40 cases across segmentation + validator, running in unit tests. *Grow toward 200 as bugs surface.* `deps: P2.2–P2.6`
 
-**🚦 Gate P2:** the golden corpus passes end-to-end; backspace/cursor are cluster-correct; all output is valid NFC.
+**🚦 Gate P2:** the golden corpus passes end-to-end; backspace/cursor are cluster-correct; all output is valid NFC. *Status: 21/21 unit tests green (build 2026-07-04); needs on-device confirmation alongside P1.15.*
 
 ---
 
@@ -443,12 +443,10 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 ---
 
 ### 10.2 Immediate next actions (start here)
-1. ✅ Package (`com.kinetic.keyboard`) & minSdk (28) decided. Scaffold written (P0.3–P0.6 done; P0.1/P0.2 pending build).
-2. **On a machine with Android Studio:** open the project → let it sync (downloads Gradle 8.9 + SDK, writes `local.properties`). If `gradlew` complains about a missing wrapper jar, run `gradle wrapper` once. This clears **P0.1/P0.2**.
-3. Run the app, enable + pick the keyboard, type in the test field → **Gate P0** (P0.7).
-4. Then **P1**: encode layouts from `reference/EXTRACTED_LAYOUTS.md`.
-
-> **Note:** `gradle/wrapper/gradle-wrapper.jar` is a binary and was not generated here; Android Studio (or `gradle wrapper`) creates it on first sync. Everything else in the scaffold is in place.
+1. ✅ Gate P0 passed. ✅ P1 core built: 5 layouts encoded, state machine, Compose renderer, popups, special keys, InputConnection wiring, layout unit tests.
+2. **Re-run from Android Studio** and QA on device: all 4 layers vs. the photos (**P1.15**), popup feel, shift behavior, space-swipe language switch.
+3. **P1.14** latency check (subjective is fine at first: no visible lag while typing fast).
+4. Then **P2**: grapheme-aware backspace + Bengali correctness rules (§3).
 
 ---
 

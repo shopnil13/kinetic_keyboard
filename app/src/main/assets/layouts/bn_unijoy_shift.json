@@ -1,0 +1,46 @@
+{
+  "id": "bn_unijoy_shift",
+  "rows": [
+    { "keys": [
+      { "label": "ং", "popup": ["১"] },
+      { "label": "য়", "popup": ["২"] },
+      { "label": "ঢ", "popup": ["৩"] },
+      { "label": "ফ", "popup": ["৪"] },
+      { "label": "ঠ", "popup": ["৫"] },
+      { "label": "ছ", "popup": ["৬"] },
+      { "label": "ঝ", "popup": ["৭"] },
+      { "label": "ঞ", "popup": ["৮"] },
+      { "label": "ঘ", "popup": ["৯"] },
+      { "label": "ঢ়", "popup": ["০"] }
+    ]},
+    { "keys": [
+      { "label": "র্‍", "output": "র্", "gap": 5 },
+      { "label": "ূ", "popup": ["ঊ"] },
+      { "label": "ী", "popup": ["ঈ"] },
+      { "label": "অ" },
+      { "label": "ঁ" },
+      { "label": "ভ" },
+      { "label": "খ" },
+      { "label": "থ" },
+      { "label": "ধ" }
+    ]},
+    { "keys": [
+      { "type": "shift", "width": 15 },
+      { "label": "‍্য", "output": "্য" },
+      { "label": "ৌ", "popup": ["ঔ"] },
+      { "label": "ৈ", "popup": ["ঐ"] },
+      { "label": "ল" },
+      { "label": "ণ" },
+      { "label": "ষ" },
+      { "label": "শ" },
+      { "type": "backspace", "width": 15 }
+    ]},
+    { "keys": [
+      { "type": "layerSwitch", "target": "symbols", "label": "?123", "width": 20 },
+      { "label": "," },
+      { "type": "space", "width": 40 },
+      { "label": "।", "popup": [",", "?", "!", ".", ":", ";"] },
+      { "type": "enter", "width": 20 }
+    ]}
+  ]
+}

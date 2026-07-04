@@ -1,0 +1,47 @@
+{
+  "id": "symbols_shift",
+  "rows": [
+    { "keys": [
+      { "label": "~" },
+      { "label": "`" },
+      { "label": "|" },
+      { "label": "•", "popup": ["♪", "♥", "♠", "♦", "♣"] },
+      { "label": "√" },
+      { "label": "π", "popup": ["Π"] },
+      { "label": "÷" },
+      { "label": "×" },
+      { "label": "{" },
+      { "label": "}" }
+    ]},
+    { "keys": [
+      { "type": "tab", "label": "⇥" },
+      { "label": "£" },
+      { "label": "¢" },
+      { "label": "€" },
+      { "label": "°" },
+      { "label": "^", "popup": ["↑", "↓", "←", "→"] },
+      { "label": "_" },
+      { "label": "=", "popup": ["≠", "≈", "∞"] },
+      { "label": "[" },
+      { "label": "]" }
+    ]},
+    { "keys": [
+      { "type": "layerSwitch", "target": "symbols", "label": "ALT", "width": 15 },
+      { "label": "™" },
+      { "label": "®" },
+      { "label": "©" },
+      { "label": "¶", "popup": ["§"] },
+      { "label": "\\" },
+      { "label": "<", "popup": ["≤", "«", "‹"] },
+      { "label": ">", "popup": ["≥", "»", "›"] },
+      { "type": "backspace", "width": 15 }
+    ]},
+    { "keys": [
+      { "type": "layerSwitch", "target": "letters", "label": "ABC", "width": 20 },
+      { "label": "„" },
+      { "type": "space", "width": 40 },
+      { "label": "…" },
+      { "type": "enter", "width": 20 }
+    ]}
+  ]
+}

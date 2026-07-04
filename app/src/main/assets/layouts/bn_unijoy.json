@@ -1,0 +1,46 @@
+{
+  "id": "bn_unijoy",
+  "rows": [
+    { "keys": [
+      { "label": "ঙ", "popup": ["১"] },
+      { "label": "য", "popup": ["২"] },
+      { "label": "ড", "popup": ["ঢ", "৩"] },
+      { "label": "প", "popup": ["ফ", "৪"] },
+      { "label": "ট", "popup": ["ঠ", "৫"] },
+      { "label": "চ", "popup": ["ছ", "৬"] },
+      { "label": "জ", "popup": ["ঝ", "৭"] },
+      { "label": "হ", "popup": ["ঞ", "৮"] },
+      { "label": "গ", "popup": ["ঘ", "৯"] },
+      { "label": "ড়", "popup": ["ঢ়", "০"] }
+    ]},
+    { "keys": [
+      { "label": "ৃ", "popup": ["ঋ"], "gap": 5 },
+      { "label": "ু", "popup": ["উ"] },
+      { "label": "ি", "popup": ["ই"] },
+      { "label": "া", "popup": ["আ"] },
+      { "label": "্", "popup": ["্‌", "্‍"] },
+      { "label": "ব", "popup": ["ভ"] },
+      { "label": "ক", "popup": ["খ"] },
+      { "label": "ত", "popup": ["ৎ"] },
+      { "label": "দ", "popup": ["ধ"] }
+    ]},
+    { "keys": [
+      { "type": "shift", "width": 15 },
+      { "label": "‍্র", "output": "্র" },
+      { "label": "ো", "popup": ["ও"] },
+      { "label": "ে", "popup": ["এ"] },
+      { "label": "র", "popup": ["ঢ়", "ল"] },
+      { "label": "ন", "popup": ["ণ"] },
+      { "label": "স", "popup": ["ষ", "শ"] },
+      { "label": "ম", "popup": ["শ", "ঃ"] },
+      { "type": "backspace", "width": 15 }
+    ]},
+    { "keys": [
+      { "type": "layerSwitch", "target": "symbols", "label": "?123", "width": 20 },
+      { "label": "," },
+      { "type": "space", "width": 40 },
+      { "label": "।", "popup": [",", "?", "!", ".", ":", ";"] },
+      { "type": "enter", "width": 20 }
+    ]}
+  ]
+}

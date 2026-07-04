@@ -1,0 +1,47 @@
+{
+  "id": "symbols",
+  "rows": [
+    { "keys": [
+      { "label": "1", "popup": ["¹", "½", "⅓", "¼", "⅛", "১"] },
+      { "label": "2", "popup": ["²", "⅔", "২"] },
+      { "label": "3", "popup": ["³", "¾", "⅜", "৩"] },
+      { "label": "4", "popup": ["⁴", "৪"] },
+      { "label": "5", "popup": ["⅝", "৫"] },
+      { "label": "6", "popup": ["৬"] },
+      { "label": "7", "popup": ["⅞", "৭"] },
+      { "label": "8", "popup": ["৮"] },
+      { "label": "9", "popup": ["৯"] },
+      { "label": "0", "popup": ["ⁿ", "∅", "০"] }
+    ]},
+    { "keys": [
+      { "label": "@" },
+      { "label": "#" },
+      { "label": "$", "popup": ["¢", "£", "৳", "€", "¥", "₣", "₤", "₱"] },
+      { "label": "%", "popup": ["‰"] },
+      { "label": "&" },
+      { "label": "*", "popup": ["†", "‡", "★"] },
+      { "label": "-", "popup": ["_", "–", "—"] },
+      { "label": "+", "popup": ["±"] },
+      { "label": "(", "popup": ["[", "{", "<"] },
+      { "label": ")", "popup": ["]", "}", ">"] }
+    ]},
+    { "keys": [
+      { "type": "layerSwitch", "target": "symbols_shift", "label": "ALT", "width": 15 },
+      { "label": "!", "popup": ["¡"] },
+      { "label": "\"", "popup": ["“", "”", "«", "»", "˝"] },
+      { "label": "'", "popup": ["‘", "’"] },
+      { "label": ":", "popup": ["ঃ"] },
+      { "label": ";" },
+      { "label": "/" },
+      { "label": "?", "popup": ["¿"] },
+      { "type": "backspace", "width": 15 }
+    ]},
+    { "keys": [
+      { "type": "layerSwitch", "target": "letters", "label": "ABC", "width": 20 },
+      { "label": "," },
+      { "type": "space", "width": 40 },
+      { "label": "." },
+      { "type": "enter", "width": 20 }
+    ]}
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "id": "en_qwerty",
+  "caseTransformOnShift": true,
+  "rows": [
+    { "keys": [
+      { "label": "q", "popup": ["1"] },
+      { "label": "w", "popup": ["2"] },
+      { "label": "e", "popup": ["3"] },
+      { "label": "r", "popup": ["4"] },
+      { "label": "t", "popup": ["5"] },
+      { "label": "y", "popup": ["6"] },
+      { "label": "u", "popup": ["7"] },
+      { "label": "i", "popup": ["8"] },
+      { "label": "o", "popup": ["9"] },
+      { "label": "p", "popup": ["0"] }
+    ]},
+    { "keys": [
+      { "label": "a", "popup": ["@"], "gap": 5 },
+      { "label": "s", "popup": ["#"] },
+      { "label": "d", "popup": ["&"] },
+      { "label": "f", "popup": ["*"] },
+      { "label": "g", "popup": ["-"] },
+      { "label": "h", "popup": ["+"] },
+      { "label": "j", "popup": ["="] },
+      { "label": "k", "popup": ["("] },
+      { "label": "l", "popup": [")"] }
+    ]},
+    { "keys": [
+      { "type": "shift", "width": 15 },
+      { "label": "z", "popup": ["_"] },
+      { "label": "x", "popup": ["\""] },
+      { "label": "c" },
+      { "label": "v", "popup": ["'"] },
+      { "label": "b", "popup": [":"] },
+      { "label": "n", "popup": [";"] },
+      { "label": "m", "popup": ["/"] },
+      { "type": "backspace", "width": 15 }
+    ]},
+    { "keys": [
+      { "type": "layerSwitch", "target": "symbols", "label": "?123", "width": 20 },
+      { "label": "," },
+      { "type": "space", "width": 40 },
+      { "label": "." },
+      { "type": "enter", "width": 20 }
+    ]}
+  ]
+}
