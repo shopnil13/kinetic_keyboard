@@ -7,8 +7,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import android.view.inputmethod.InputConnection
+import com.kinetic.keyboard.engine.InputMode
 import com.kinetic.keyboard.engine.KeyboardStateMachine
 import com.kinetic.keyboard.engine.LayoutRepository
+import com.kinetic.keyboard.input.PhoneticComposer
 import com.kinetic.keyboard.text.BanglaTextValidator
 import com.kinetic.keyboard.text.BengaliText
 import com.kinetic.keyboard.ui.KeyAction
@@ -23,6 +26,7 @@ class KeyboardImeService : InputMethodService() {
 
     private val lifecycleOwner = ImeLifecycleOwner()
     private lateinit var stateMachine: KeyboardStateMachine
+    private val phonetic = PhoneticComposer()
 
     override fun onCreate() {
         super.onCreate()
@@ -46,6 +50,13 @@ class KeyboardImeService : InputMethodService() {
         val ic = currentInputConnection ?: return
         when (action) {
             is KeyAction.Text -> {
+                // P3.5: in phonetic mode, Roman letters stream through the transliterator.
+                if (stateMachine.state.value.inputMode == InputMode.PHONETIC && isRomanLetter(action.text)) {
+                    ic.setComposingText(phonetic.append(action.text), 1)
+                    stateMachine.onCharCommitted()
+                    return
+                }
+                commitComposing(ic)
                 // P2.3/P2.4: NFC + repair of illegal sign sequences, based on cursor context.
                 val before = ic.getTextBeforeCursor(8, 0) ?: ""
                 val edit = BanglaTextValidator.process(before, action.text)
@@ -54,20 +65,47 @@ class KeyboardImeService : InputMethodService() {
                 stateMachine.onCharCommitted()
             }
             KeyAction.Space -> {
+                commitComposing(ic)
                 ic.commitText(" ", 1)
                 stateMachine.onCharCommitted()
             }
             KeyAction.Delete -> handleDelete()
-            KeyAction.Enter -> handleEnter()
+            KeyAction.Enter -> {
+                commitComposing(ic)
+                handleEnter()
+            }
             KeyAction.Shift -> stateMachine.onShift()
-            is KeyAction.LayerSwitch -> stateMachine.switchLayer(action.target)
-            KeyAction.CycleLanguage -> stateMachine.cycleLanguage()
+            is KeyAction.LayerSwitch -> {
+                commitComposing(ic)
+                stateMachine.switchLayer(action.target)
+            }
+            KeyAction.CycleLanguage -> {
+                commitComposing(ic)
+                stateMachine.cycleLanguage()
+            }
+        }
+    }
+
+    private fun isRomanLetter(s: String) = s.length == 1 && (s[0] in 'a'..'z' || s[0] in 'A'..'Z')
+
+    /** Finalize any pending phonetic composition (word boundary). */
+    private fun commitComposing(ic: InputConnection) {
+        if (phonetic.isComposing) {
+            ic.finishComposingText()
+            phonetic.reset()
         }
     }
 
     /** P2.2: delete a full grapheme cluster (ক্তি in one press), or the selection if one exists. */
     private fun handleDelete() {
         val ic = currentInputConnection ?: return
+        // P3.5: while composing Banglish, backspace edits the Roman buffer, not the Bangla text.
+        if (phonetic.isComposing) {
+            val text = phonetic.deleteLast()
+            ic.setComposingText(text, 1)
+            if (text.isEmpty()) ic.finishComposingText()
+            return
+        }
         val selected = ic.getSelectedText(0)
         if (!selected.isNullOrEmpty()) {
             ic.commitText("", 1)
@@ -95,6 +133,7 @@ class KeyboardImeService : InputMethodService() {
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
+        phonetic.reset() // never carry a half-typed word across fields
         lifecycleOwner.onPause()
         super.onFinishInputView(finishingInput)
     }

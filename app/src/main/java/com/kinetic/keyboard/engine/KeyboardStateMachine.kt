@@ -5,6 +5,18 @@ import com.kinetic.keyboard.engine.model.LayoutDef
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
+/** How key output is processed before reaching the editor (SPEC.md §5). */
+enum class InputMode {
+    /** UniJoy fixed layout: key → Unicode directly. */
+    FIXED,
+
+    /** Plain Latin typing. */
+    LATIN,
+
+    /** Banglish: Roman letters transliterated via the phonetic engine (§5.2). */
+    PHONETIC,
+}
+
 /** A language "set": its base layer and (for Bangla) a dedicated shift layer. */
 data class LanguageSet(
     val id: String,
@@ -12,6 +24,7 @@ data class LanguageSet(
     val baseLayout: String,
     /** null → shift is a case transform on the base layout (English). */
     val shiftLayout: String? = null,
+    val inputMode: InputMode = InputMode.FIXED,
 )
 
 data class KeyboardUiState(
@@ -19,6 +32,7 @@ data class KeyboardUiState(
     val shifted: Boolean,
     val capsLock: Boolean,
     val spaceLabel: String,
+    val inputMode: InputMode,
 ) {
     /** English-style shift: uppercase labels & output. */
     val uppercase: Boolean get() = layout.caseTransformOnShift && (shifted || capsLock)
@@ -50,6 +64,7 @@ class KeyboardStateMachine(
         shifted = shifted,
         capsLock = capsLock,
         spaceLabel = currentSet.displayName,
+        inputMode = currentSet.inputMode,
     )
 
     private fun show(layoutId: String) {
@@ -128,8 +143,9 @@ class KeyboardStateMachine(
     companion object {
         private const val DOUBLE_TAP_MS = 350L
         val DEFAULT_SETS = listOf(
-            LanguageSet("bangla", "ইউনিজয়", "bn_unijoy", "bn_unijoy_shift"),
-            LanguageSet("english", "English", "en_qwerty"),
+            LanguageSet("bangla", "ইউনিজয়", "bn_unijoy", "bn_unijoy_shift", InputMode.FIXED),
+            LanguageSet("phonetic", "ফোনেটিক", "en_qwerty", null, InputMode.PHONETIC),
+            LanguageSet("english", "English", "en_qwerty", null, InputMode.LATIN),
         )
     }
 }

@@ -312,7 +312,7 @@ This is the single source of truth for build progress. Every unit of work is a t
 | P0 | Scaffold & IME plumbing | 1–2 d | 🟢 done (verified in Android Studio) | Keyboard appears in picker, types 1 char on device |
 | P1 | Exact 4-layer layout rendering | 1–1.5 wk | 🟡 code written; on-device QA pending | All layers match photos, type correct Unicode |
 | P2 | Bengali correctness core | 1 wk | 🟡 code + tests green; on-device QA pending | Golden corpus passes; cluster backspace works |
-| P3 | Banglish phonetic (port) | 1–2 wk | 🔴 | Kotlin output == Java reference on word list |
+| P3 | Banglish phonetic (port) | 1–2 wk | 🟡 ported + corpus green; refactor (P3.6) & candidates (P3.7→P4) open | Kotlin output == reference behavior on corpus |
 | P4 | Suggestions / prediction / autocorrect | 2 wk | 🔴 | Relevant suggestions in all 3 modes |
 | P5 | Parity polish (themes, emoji, settings, …) | ongoing | 🔴 | P1.2 feature set complete |
 | P6 | Hardening & release | 1–2 wk | 🔴 | Passes device matrix; shippable build |
@@ -380,15 +380,15 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 ### P3 — Banglish phonetic engine (port from reference)
 *Goal: as-you-type Roman→Bengali matching the old app. Port [reference/RidmikParser.java](reference/RidmikParser.java) + [reference/BanglaUnicode.java](reference/BanglaUnicode.java); do not rebuild from scratch.*
 
-- [ ] **P3.1** Port `BanglaUnicode` tables to Kotlin (`map`, `kars`, `jkt`, `djkt`, `djktt`). *DoD: table-equality test vs. the Java maps.*
-- [ ] **P3.2** Port `RidmikParser.toBangla()` literally to Kotlin (preserve logic; keep `v1/v9/v12` semantics via a comment). *DoD: compiles, runs on a string.* `deps: P3.1`
-- [ ] **P3.3** Golden equivalence test — run a large Banglish word list through Kotlin vs. the Java reference; outputs must be identical. *DoD: 100% match (or documented, justified diffs).* `deps: P3.2`
-- [ ] **P3.4** Streaming/incremental parse — re-run over the current word as user types, backed by the composing region (not whole-buffer). *DoD: typing "amar" updates composing text live.* `deps: P3.3`
-- [ ] **P3.5** `PhoneticProcessor` — integrate with `InputConnection` composing region; commit on space/punct/candidate select. *DoD: full words type correctly in a field.* `deps: P3.4`
-- [ ] **P3.6** Refactor — rename cryptic vars, externalize `map`/`kars`/`jkt` to JSON assets, keep the golden test green throughout. *DoD: readable code, tests still pass.* `deps: P3.3`
-- [ ] **P3.7** Candidate generation — parser output as candidate #1 (dictionary ranking added in P4). *DoD: at least the deterministic transliteration surfaces.* `deps: P3.5`
+- [x] **P3.1** `BanglaUnicodeTable` ported 1:1 (`map`, `kars`, `jkt`, `djkt`, `djktt`), incl. the original's overwrite quirks (dh→"" wins). *Done.*
+- [x] **P3.2** `RidmikParser.toBangla()` ported literally — `v1/v9/v12` window preserved, roles documented in the header. *Done.* `deps: P3.1`
+- [x] **P3.3** Golden corpus — *deviation:* the decompiled Java is not compilable (decompiler artifacts: boolean/int confusion, lost loop structure), so no runnable A/B. Instead: ~25 hand-traced cases (each expectation walked through the original control flow) covering inherent-vowel, auto-conjuncts, two-char consonants/vowels, reph (rr), ঋ/ৃ (rri), kkh→ক্ষ, x→এক্স, TH→ৎ. *DoD met via corpus; grow with user reports.* `deps: P3.2`
+- [x] **P3.4** Streaming parse — `PhoneticComposer` keeps the Roman word buffer, re-transliterates per keystroke; backspace edits the Roman buffer (deleting "i" from আমি → আম). *Done.* `deps: P3.3`
+- [x] **P3.5** IME integration — third language set "ফোনেটিক" (`InputMode.PHONETIC`, QWERTY layer); composing region updated live; commits on space/punct/enter/layer-switch/language-cycle; buffer cleared on field exit. *Done.* `deps: P3.4`
+- [ ] **P3.6** Refactor — rename `v1/v5/v7…`, externalize tables to JSON assets; golden corpus must stay green. `deps: P3.3`
+- [~] **P3.7** Candidates — deterministic transliteration streams as composing text; ranked candidate strip arrives with P4 (needs the dictionary + strip UI). `deps: P3.5`
 
-**🚦 Gate P3:** Banglish typing on device produces the same output as the reference app for the test word list.
+**🚦 Gate P3:** Banglish typing on device produces the same output as the reference app for the test word list. *Status: 31/31 unit tests green incl. 10 phonetic golden cases; needs on-device typing check (swipe space to "ফোনেটিক", type "ami tumi").*
 
 ---
 
