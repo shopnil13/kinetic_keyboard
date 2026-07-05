@@ -122,6 +122,13 @@ private fun SettingsScreen(
             valueRange = KeyboardPrefs.MIN_KEY_HEIGHT.toFloat()..KeyboardPrefs.MAX_KEY_HEIGHT.toFloat(),
         )
 
+        Text("Hold delay (long-press): ${prefs.longPressMs} ms")
+        Slider(
+            value = prefs.longPressMs.toFloat(),
+            onValueChange = { scope.launch { prefsRepo.setLongPressMs(it.toInt()) } },
+            valueRange = KeyboardPrefs.MIN_LONG_PRESS_MS.toFloat()..KeyboardPrefs.MAX_LONG_PRESS_MS.toFloat(),
+        )
+
         HorizontalDivider()
         Text("Feedback", style = MaterialTheme.typography.titleMedium)
 

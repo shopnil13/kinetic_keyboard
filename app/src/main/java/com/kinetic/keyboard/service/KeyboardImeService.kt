@@ -89,6 +89,7 @@ class KeyboardImeService : InputMethodService() {
                     suggestions = words,
                     theme = theme,
                     keyHeight = prefs.keyHeightDp.dp,
+                    longPressMs = prefs.longPressMs,
                     onAction = ::handleAction,
                     onSuggestion = ::commitSuggestion,
                 )

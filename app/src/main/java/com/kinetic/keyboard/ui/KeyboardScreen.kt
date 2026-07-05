@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -59,30 +62,41 @@ fun KeyboardScreen(
     suggestions: List<String>,
     theme: KbTheme,
     keyHeight: Dp,
+    longPressMs: Int,
     onAction: (KeyAction) -> Unit,
     onSuggestion: (String) -> Unit,
 ) {
-    Surface(color = theme.background) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 1.dp, vertical = 3.dp)) {
-            SuggestionStrip(
-                suggestions = suggestions,
-                theme = theme,
-                onSuggestion = onSuggestion,
-                onPunctuation = { onAction(KeyAction.Text(it)) },
-            )
-            ui.layout.rows.forEach { row ->
-                Row(Modifier.fillMaxWidth().height(keyHeight)) {
-                    var used = 0f
-                    row.keys.forEach { key ->
-                        if (key.gap > 0f) {
-                            Spacer(Modifier.weight(key.gap))
-                            used += key.gap
+    // detectTapGestures takes its long-press timeout from LocalViewConfiguration —
+    // wrapping it lets the user's "hold delay" setting apply to every key at once.
+    val base = LocalViewConfiguration.current
+    val tuned = remember(base, longPressMs) {
+        object : ViewConfiguration by base {
+            override val longPressTimeoutMillis: Long = longPressMs.toLong()
+        }
+    }
+    CompositionLocalProvider(LocalViewConfiguration provides tuned) {
+        Surface(color = theme.background) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 1.dp, vertical = 3.dp)) {
+                SuggestionStrip(
+                    suggestions = suggestions,
+                    theme = theme,
+                    onSuggestion = onSuggestion,
+                    onPunctuation = { onAction(KeyAction.Text(it)) },
+                )
+                ui.layout.rows.forEach { row ->
+                    Row(Modifier.fillMaxWidth().height(keyHeight)) {
+                        var used = 0f
+                        row.keys.forEach { key ->
+                            if (key.gap > 0f) {
+                                Spacer(Modifier.weight(key.gap))
+                                used += key.gap
+                            }
+                            val w = key.widthOrDefault()
+                            KeyView(key, ui, theme, keyHeight, onAction, Modifier.weight(w))
+                            used += w
                         }
-                        val w = key.widthOrDefault()
-                        KeyView(key, ui, theme, keyHeight, onAction, Modifier.weight(w))
-                        used += w
+                        if (used < 99.5f) Spacer(Modifier.weight(100f - used))
                     }
-                    if (used < 99.5f) Spacer(Modifier.weight(100f - used))
                 }
             }
         }
