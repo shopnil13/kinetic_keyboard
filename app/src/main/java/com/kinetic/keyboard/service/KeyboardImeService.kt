@@ -13,7 +13,6 @@ import com.kinetic.keyboard.engine.KeyboardStateMachine
 import com.kinetic.keyboard.engine.LayoutRepository
 import com.kinetic.keyboard.input.PhoneticComposer
 import com.kinetic.keyboard.text.BanglaTextValidator
-import com.kinetic.keyboard.text.BengaliText
 import com.kinetic.keyboard.ui.KeyAction
 import com.kinetic.keyboard.ui.KeyboardScreen
 
@@ -42,6 +41,10 @@ class KeyboardImeService : InputMethodService() {
                 KeyboardScreen(ui = ui, onAction = ::handleAction)
             }
         }
+        // Compose resolves its Recomposer by walking up from the WINDOW'S ROOT view, not from the
+        // ComposeView itself — the owners must be visible from the IME dialog's decorView or
+        // composition dies with "ViewTreeLifecycleOwner not found" (found the hard way on-device).
+        window?.window?.decorView?.let { lifecycleOwner.attachTo(it) }
         lifecycleOwner.attachTo(composeView)
         return composeView
     }
@@ -96,7 +99,12 @@ class KeyboardImeService : InputMethodService() {
         }
     }
 
-    /** P2.2: delete a full grapheme cluster (ক্তি in one press), or the selection if one exists. */
+    /**
+     * P2.2 (revised per user decision): backspace removes the LAST KEYSTROKE, not the whole
+     * grapheme cluster — কা ⌫ → ক (only the া goes). One code point per press, surrogate-safe,
+     * matching the original Ridmik feel. Cluster segmentation (BengaliText) stays available for
+     * cursor logic later.
+     */
     private fun handleDelete() {
         val ic = currentInputConnection ?: return
         // P3.5: while composing Banglish, backspace edits the Roman buffer, not the Bangla text.
@@ -111,9 +119,10 @@ class KeyboardImeService : InputMethodService() {
             ic.commitText("", 1)
             return
         }
-        val before = ic.getTextBeforeCursor(16, 0) ?: ""
-        val n = BengaliText.lastClusterLength(before)
-        if (n > 0) ic.deleteSurroundingText(n, 0)
+        val before = ic.getTextBeforeCursor(8, 0) ?: ""
+        if (before.isEmpty()) return
+        val n = Character.charCount(Character.codePointBefore(before, before.length))
+        ic.deleteSurroundingText(n, 0)
     }
 
     /** Action-aware enter: trigger the field's IME action (search/send/go) when one is set. */

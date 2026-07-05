@@ -59,14 +59,14 @@ private object KbColors {
     val accent = Color(0xFF4FC3F7)
 }
 
-private val KeyHeight = 54.dp
+private val KeyHeight = 62.dp
 private const val REPEAT_INITIAL_MS = 350L
 private const val REPEAT_INTERVAL_MS = 50L
 
 @Composable
 fun KeyboardScreen(ui: KeyboardUiState, onAction: (KeyAction) -> Unit) {
     Surface(color = KbColors.background) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 4.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 1.dp, vertical = 3.dp)) {
             ui.layout.rows.forEach { row ->
                 Row(Modifier.fillMaxWidth().height(KeyHeight)) {
                     var used = 0f
@@ -180,7 +180,7 @@ private fun KeyView(
 
     Box(
         modifier = modifier
-            .padding(2.dp)
+            .padding(horizontal = 1.5.dp, vertical = 2.dp)
             .background(
                 when {
                     pressed -> KbColors.keyPressed
@@ -195,7 +195,7 @@ private fun KeyView(
         Text(
             text = label,
             color = if (key.type == KeyTypes.SHIFT && ui.shiftVisual) KbColors.accent else KbColors.label,
-            fontSize = if (key.type == KeyTypes.SPACE) 13.sp else 21.sp,
+            fontSize = if (key.type == KeyTypes.SPACE) 14.sp else 24.sp,
             textAlign = TextAlign.Center,
         )
         // Long-press hint: first popup char, top-right corner (matches the original's superscripts).

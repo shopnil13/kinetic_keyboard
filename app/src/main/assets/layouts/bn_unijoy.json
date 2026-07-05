@@ -18,7 +18,7 @@
       { "label": "ু", "popup": ["উ"] },
       { "label": "ি", "popup": ["ই"] },
       { "label": "া", "popup": ["আ"] },
-      { "label": "্", "popup": ["্‌", "্‍"] },
+      { "label": "্" },
       { "label": "ব", "popup": ["ভ"] },
       { "label": "ক", "popup": ["খ"] },
       { "label": "ত", "popup": ["ৎ"] },
@@ -29,10 +29,10 @@
       { "label": "‍্র", "output": "্র" },
       { "label": "ো", "popup": ["ও"] },
       { "label": "ে", "popup": ["এ"] },
-      { "label": "র", "popup": ["ঢ়", "ল"] },
+      { "label": "র", "popup": ["ল"] },
       { "label": "ন", "popup": ["ণ"] },
       { "label": "স", "popup": ["ষ", "শ"] },
-      { "label": "ম", "popup": ["শ", "ঃ"] },
+      { "label": "ম", "popup": ["ঃ"] },
       { "type": "backspace", "width": 15 }
     ]},
     { "keys": [

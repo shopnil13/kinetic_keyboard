@@ -31,6 +31,8 @@ Cloud sync of user dictionary, federated learning, handwriting input, multi-devi
 ## 2. Reference layout
 
 > **✅ RESOLVED — ground truth extracted.** The original Ridmik APK was decompiled and its compiled `res/xml/kbd_unijoy*.xml`, `kbd_symbols.xml`, and `kbd_qwerty.xml` decoded (androguard). The authoritative, character-exact layouts — including every long-press popup and the special conjunct-key codes — now live in **[reference/EXTRACTED_LAYOUTS.md](reference/EXTRACTED_LAYOUTS.md)** with raw decoded XML in `reference/decoded_xml/`. **Encode Phase 1 from that file, not from the photo tables below.** All `⚠VERIFY` cells are resolved there (notable fixes: u-kar not ri-kar on row 2; dedicated ্র / র্ / ্য conjunct keys where the photos were ambiguous).
+>
+> **User-requested deviations from the extraction (2026-07-05):** র long-press → ল only (was ঢ়+ল); ম long-press → ঃ only (was শ+ঃ); ্ has no long-press popup. স keeps ষ+শ.
 
 The tables below are the original photo transcription, kept for reference only.
 
@@ -365,10 +367,10 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 *Goal: output is always valid, normalized Bengali; editing respects grapheme clusters. See §3.*
 
 - [x] **P2.1** `BengaliText` cluster segmentation — purpose-built backward scanner (virama chains, nukta, joiners) instead of ICU: JVM-testable, deterministic, typing-tuned. *Done + golden tests.*
-- [x] **P2.2** Grapheme-aware backspace — one press deletes a full cluster (শক্তি → শ in two presses); selection-aware. *Done (`handleDelete`). Deviation: repeat-on-hold also deletes clusters (predictable), not code points.* `deps: P2.1`
+- [x] **P2.2** Backspace — **user decision (2026-07-05):** delete the last *keystroke* (one code point), not the whole cluster: কা ⌫ → ক. Selection-aware; verified on emulator. `BengaliText` cluster segmentation retained for future cursor logic. `deps: P2.1`
 - [x] **P2.3** NFC normalization on commit (in `BanglaTextValidator.process`). *Done + test.*
 - [x] **P2.4** `BanglaTextValidator` — permissive policy with repairs: double vowel-sign → replace, sign-after-hasanta → replace, no double hasanta. *Done + tests.*
-- [x] **P2.5** Hasanta long-press → explicit ্+ZWNJ (break ligature) and ্+ZWJ (force) variants. *Done (popup on ্).* `deps: P2.1`
+- [x] **P2.5** ~~Hasanta ZWNJ/ZWJ popup~~ — **reverted per user (2026-07-05):** ্ has no long-press popup. If ligature control is ever needed, expose it elsewhere (settings/symbols). `deps: P2.1`
 - [x] **P2.6** Conjunct keys ্র / র্ / ্য verified end-to-end (ক+্র→ক্র, র্+ক→র্ক). *Done: golden tests.* `deps: P2.5`
 - [ ] **P2.7** Cursor movement respects clusters. *Partially N/A — layout has no arrow keys; app-side taps control the caret. Revisit if cursor keys are added (P5).* `deps: P2.1`
 - [~] **P2.8** Golden corpus — ~40 cases across segmentation + validator, running in unit tests. *Grow toward 200 as bugs surface.* `deps: P2.2–P2.6`
