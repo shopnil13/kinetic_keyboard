@@ -59,14 +59,24 @@ private object KbColors {
     val accent = Color(0xFF4FC3F7)
 }
 
-private val KeyHeight = 62.dp
+private val KeyHeight = 72.dp
 private const val REPEAT_INITIAL_MS = 350L
 private const val REPEAT_INTERVAL_MS = 50L
 
 @Composable
-fun KeyboardScreen(ui: KeyboardUiState, onAction: (KeyAction) -> Unit) {
+fun KeyboardScreen(
+    ui: KeyboardUiState,
+    suggestions: List<String>,
+    onAction: (KeyAction) -> Unit,
+    onSuggestion: (String) -> Unit,
+) {
     Surface(color = KbColors.background) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 1.dp, vertical = 3.dp)) {
+            SuggestionStrip(
+                suggestions = suggestions,
+                onSuggestion = onSuggestion,
+                onPunctuation = { onAction(KeyAction.Text(it)) },
+            )
             ui.layout.rows.forEach { row ->
                 Row(Modifier.fillMaxWidth().height(KeyHeight)) {
                     var used = 0f

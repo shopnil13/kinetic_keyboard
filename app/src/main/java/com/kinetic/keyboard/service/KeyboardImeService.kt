@@ -3,23 +3,33 @@ package com.kinetic.keyboard.service
 import android.inputmethodservice.InputMethodService
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import android.view.inputmethod.InputConnection
 import com.kinetic.keyboard.engine.InputMode
 import com.kinetic.keyboard.engine.KeyboardStateMachine
 import com.kinetic.keyboard.engine.LayoutRepository
 import com.kinetic.keyboard.input.PhoneticComposer
+import com.kinetic.keyboard.suggest.Dictionary
+import com.kinetic.keyboard.suggest.SuggestionManager
+import com.kinetic.keyboard.suggest.UserDictionary
 import com.kinetic.keyboard.text.BanglaTextValidator
 import com.kinetic.keyboard.ui.KeyAction
 import com.kinetic.keyboard.ui.KeyboardScreen
+import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * Kinetic Keyboard IME entry point (SPEC.md §4).
- * Phase 1: data-driven layouts (assets/layouts) rendered in Compose, wired to the InputConnection.
- * Input processors (§5) and Bengali correctness (§3) arrive in Phase 2/3.
+ * P1: data-driven layouts · P2: Bengali commit pipeline · P3: phonetic composing ·
+ * P4: dictionary suggestions in the strip.
  */
 class KeyboardImeService : InputMethodService() {
 
@@ -27,10 +37,24 @@ class KeyboardImeService : InputMethodService() {
     private lateinit var stateMachine: KeyboardStateMachine
     private val phonetic = PhoneticComposer()
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private lateinit var suggestionManager: SuggestionManager
+    private val suggestions = MutableStateFlow<List<String>>(emptyList())
+
     override fun onCreate() {
         super.onCreate()
         lifecycleOwner.onCreate()
         stateMachine = KeyboardStateMachine(LayoutRepository(this))
+
+        val userDict = UserDictionary(File(filesDir, "user_dict.tsv"))
+        suggestionManager = SuggestionManager(userDict = userDict)
+        scope.launch(Dispatchers.IO) {
+            userDict.load()
+            suggestionManager.bangla =
+                assets.open("dict/bn.tsv").bufferedReader().use(Dictionary.Companion::load)
+            suggestionManager.english =
+                assets.open("dict/en.tsv").bufferedReader().use(Dictionary.Companion::load)
+        }
     }
 
     override fun onCreateInputView(): View {
@@ -38,7 +62,13 @@ class KeyboardImeService : InputMethodService() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 val ui by stateMachine.state.collectAsState()
-                KeyboardScreen(ui = ui, onAction = ::handleAction)
+                val words by suggestions.collectAsState()
+                KeyboardScreen(
+                    ui = ui,
+                    suggestions = words,
+                    onAction = ::handleAction,
+                    onSuggestion = ::commitSuggestion,
+                )
             }
         }
         // Compose resolves its Recomposer by walking up from the WINDOW'S ROOT view, not from the
@@ -57,23 +87,25 @@ class KeyboardImeService : InputMethodService() {
                 if (stateMachine.state.value.inputMode == InputMode.PHONETIC && isRomanLetter(action.text)) {
                     ic.setComposingText(phonetic.append(action.text), 1)
                     stateMachine.onCharCommitted()
-                    return
+                } else {
+                    commitComposing(ic)
+                    // P2.3/P2.4: NFC + repair of illegal sign sequences, based on cursor context.
+                    val before = ic.getTextBeforeCursor(8, 0) ?: ""
+                    val edit = BanglaTextValidator.process(before, action.text)
+                    if (edit.deleteBefore > 0) ic.deleteSurroundingText(edit.deleteBefore, 0)
+                    if (edit.text.isNotEmpty()) ic.commitText(edit.text, 1)
+                    stateMachine.onCharCommitted()
                 }
-                commitComposing(ic)
-                // P2.3/P2.4: NFC + repair of illegal sign sequences, based on cursor context.
-                val before = ic.getTextBeforeCursor(8, 0) ?: ""
-                val edit = BanglaTextValidator.process(before, action.text)
-                if (edit.deleteBefore > 0) ic.deleteSurroundingText(edit.deleteBefore, 0)
-                if (edit.text.isNotEmpty()) ic.commitText(edit.text, 1)
-                stateMachine.onCharCommitted()
             }
             KeyAction.Space -> {
+                learnCurrentWord(ic)
                 commitComposing(ic)
                 ic.commitText(" ", 1)
                 stateMachine.onCharCommitted()
             }
             KeyAction.Delete -> handleDelete()
             KeyAction.Enter -> {
+                learnCurrentWord(ic)
                 commitComposing(ic)
                 handleEnter()
             }
@@ -87,6 +119,7 @@ class KeyboardImeService : InputMethodService() {
                 stateMachine.cycleLanguage()
             }
         }
+        updateSuggestions(ic)
     }
 
     private fun isRomanLetter(s: String) = s.length == 1 && (s[0] in 'a'..'z' || s[0] in 'A'..'Z')
@@ -97,6 +130,43 @@ class KeyboardImeService : InputMethodService() {
             ic.finishComposingText()
             phonetic.reset()
         }
+    }
+
+    /** P4: strip tap — replace the word being typed and learn it. */
+    private fun commitSuggestion(word: String) {
+        val ic = currentInputConnection ?: return
+        if (phonetic.isComposing) {
+            phonetic.reset() // commitText below replaces the composing region
+        } else {
+            val before = ic.getTextBeforeCursor(48, 0) ?: ""
+            val current = SuggestionManager.currentWord(before)
+            if (current.isNotEmpty()) ic.deleteSurroundingText(current.length, 0)
+        }
+        ic.commitText("$word ", 1)
+        suggestionManager.userDict?.learn(word)
+        stateMachine.onCharCommitted()
+        updateSuggestions(ic)
+    }
+
+    /** P4.8: words the user finishes (space/enter) feed the user dictionary. */
+    private fun learnCurrentWord(ic: InputConnection) {
+        val word = if (phonetic.isComposing) {
+            phonetic.current()
+        } else {
+            SuggestionManager.currentWord(ic.getTextBeforeCursor(48, 0) ?: "")
+        }
+        if (word.length >= 2) suggestionManager.userDict?.learn(word)
+    }
+
+    /** P4.5/P4.10: recompute strip candidates for the word at the cursor. */
+    private fun updateSuggestions(ic: InputConnection) {
+        val mode = stateMachine.state.value.inputMode
+        val prefix = if (phonetic.isComposing) {
+            phonetic.current()
+        } else {
+            SuggestionManager.currentWord(ic.getTextBeforeCursor(48, 0) ?: "")
+        }
+        suggestions.value = suggestionManager.suggest(prefix, useBangla = mode != InputMode.LATIN)
     }
 
     /**
@@ -136,18 +206,31 @@ class KeyboardImeService : InputMethodService() {
         if (hasAction) ic.performEditorAction(action) else ic.commitText("\n", 1)
     }
 
+    override fun onUpdateSelection(
+        oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int,
+        candidatesStart: Int, candidatesEnd: Int,
+    ) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        // Cursor moved (tap, selection): refresh the strip for the word now at the cursor.
+        currentInputConnection?.let { if (!phonetic.isComposing) updateSuggestions(it) }
+    }
+
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         lifecycleOwner.onResume()
+        currentInputConnection?.let { updateSuggestions(it) }
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         phonetic.reset() // never carry a half-typed word across fields
+        suggestions.value = emptyList()
+        scope.launch(Dispatchers.IO) { suggestionManager.userDict?.saveIfDirty() }
         lifecycleOwner.onPause()
         super.onFinishInputView(finishingInput)
     }
 
     override fun onDestroy() {
+        scope.cancel()
         lifecycleOwner.onDestroy()
         super.onDestroy()
     }

@@ -315,7 +315,7 @@ This is the single source of truth for build progress. Every unit of work is a t
 | P1 | Exact 4-layer layout rendering | 1–1.5 wk | 🟡 code written; on-device QA pending | All layers match photos, type correct Unicode |
 | P2 | Bengali correctness core | 1 wk | 🟡 code + tests green; on-device QA pending | Golden corpus passes; cluster backspace works |
 | P3 | Banglish phonetic (port) | 1–2 wk | 🟡 ported + corpus green; refactor (P3.6) & candidates (P3.7→P4) open | Kotlin output == reference behavior on corpus |
-| P4 | Suggestions / prediction / autocorrect | 2 wk | 🔴 | Relevant suggestions in all 3 modes |
+| P4 | Suggestions / prediction / autocorrect | 2 wk | 🟡 strip + dictionaries live in all 3 modes; n-gram (P4.6) & autocorrect (P4.7) pending | Relevant suggestions in all 3 modes |
 | P5 | Parity polish (themes, emoji, settings, …) | ongoing | 🔴 | P1.2 feature set complete |
 | P6 | Hardening & release | 1–2 wk | 🔴 | Passes device matrix; shippable build |
 
@@ -397,16 +397,16 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 ### P4 — Suggestions, prediction & autocorrect
 *Goal: a useful suggestion strip and next-word prediction across all three modes. See §7.*
 
-- [ ] **P4.1** Dictionary format + asset build pipeline — compact Trie/FST with frequencies. *DoD: builder script + loader round-trip test.*
-- [ ] **P4.2** Source & preprocess corpora — Bangla + English word-frequency lists; record provenance & license. *DoD: cleaned lists checked in / scripted.* `deps: P4.1`
-- [ ] **P4.3** `Dictionary` loader + prefix lookup. *DoD: lookup latency < a few ms; unit tests.* `deps: P4.2`
-- [ ] **P4.4** `SuggestionStrip` Compose UI — 3-slot strip, scroll, tap-to-commit, blue punctuation strip (§5.4). *DoD: renders & commits.* `deps: P1.9`
-- [ ] **P4.5** Prefix suggestions wired strip↔engine for fixed + English modes. *DoD: typing shows ranked candidates.* `deps: P4.3, P4.4`
-- [ ] **P4.6** N-gram next-word model (bigram/trigram, Kneser-Ney). *DoD: predicts next word after commit; tests.* `deps: P4.3`
-- [ ] **P4.7** `AutoCorrector` — edit-distance + keyboard-adjacency, conservative defaults, easy undo. *DoD: fixes typos without over-correcting (test set).* `deps: P4.3`
-- [ ] **P4.8** User dictionary (Room) — learn accepted/typed words, boost their frequency. *DoD: accepted word ranks higher next time.* `deps: P4.3`
-- [ ] **P4.9** `SuggestionManager` — merge & rank exact/autocorrect/phonetic/user/emoji/clipboard sources. *DoD: single ranked list; unit tests for ranking.* `deps: P4.5–P4.8`
-- [ ] **P4.10** Phonetic candidates in strip (dictionary-ranked Banglish). *DoD: "amar" → আমার, আমরা… ranked.* `deps: P3.7, P4.9`
+- [x] **P4.1** Dictionary format — sorted TSV → parallel arrays + binary-search prefix range (sub-ms on 30k words). Trie/FST deferred until profiling demands it. *Done + tests.*
+- [x] **P4.2** Corpora — hermitdave/FrequencyWords 2018 (OpenSubtitles, **CC-BY-SA**): bn 30k + en 25k words, filtered/sorted into `assets/dict/*.tsv` (~1 MB). *Done.* `deps: P4.1`
+- [x] **P4.3** `Dictionary` loader + `byPrefix` top-k. *Done; asset sanity tests included.* `deps: P4.2`
+- [x] **P4.4** `SuggestionStrip` — 3 candidates while typing; the photos' **blue punctuation row** (`! ? , " ' | : ; (`) when idle. *Done, verified on emulator.* `deps: P1.9`
+- [x] **P4.5** Prefix suggestions live in fixed + English modes; refresh on keypress and cursor moves (`onUpdateSelection`); tap replaces word + space. *Verified: ক → কি/করে/করতে → tap → "করে ".* `deps: P4.3, P4.4`
+- [ ] **P4.6** N-gram next-word model (bigram/trigram). *DoD: predicts next word after commit; tests.* `deps: P4.3`
+- [ ] **P4.7** `AutoCorrector` — edit-distance + keyboard-adjacency, conservative defaults. *DoD: fixes typos without over-correcting (test set).* `deps: P4.3`
+- [~] **P4.8** User dictionary — file-backed word counts (learn on space/enter/candidate-tap; user words outrank corpus). Room migration is a later refinement. `deps: P4.3`
+- [~] **P4.9** `SuggestionManager` — merges user-dict > corpus with dedupe; autocorrect/n-gram/emoji sources plug in via P4.6/P4.7. `deps: P4.5–P4.8`
+- [x] **P4.10** Phonetic candidates — composing transliteration drives Bangla-dict prefix lookup ("amar" → আমার, আমরা…); strip tap replaces the composing region. *Done.* `deps: P3.7, P4.9`
 
 **🚦 Gate P4:** relevant word suggestions and next-word prediction work in Bangla-fixed, Banglish, and English.
 

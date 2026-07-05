@@ -11,6 +11,9 @@ class PhoneticComposer(private val parser: RidmikParser = RidmikParser()) {
 
     val isComposing: Boolean get() = roman.isNotEmpty()
 
+    /** Current transliteration of the buffer ("" when not composing). */
+    fun current(): String = if (roman.isEmpty()) "" else parser.toBangla(roman.toString())
+
     /** Append a Roman letter; returns the new Bangla composing text. */
     fun append(s: String): String {
         roman.append(s)
