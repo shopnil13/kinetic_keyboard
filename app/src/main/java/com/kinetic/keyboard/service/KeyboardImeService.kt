@@ -1,13 +1,19 @@
 package com.kinetic.keyboard.service
 
 import android.inputmethodservice.InputMethodService
+import android.media.AudioManager
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.unit.dp
+import com.kinetic.keyboard.data.KeyboardPrefs
+import com.kinetic.keyboard.data.PrefsRepository
 import com.kinetic.keyboard.engine.InputMode
 import com.kinetic.keyboard.engine.KeyboardStateMachine
 import com.kinetic.keyboard.engine.LayoutRepository
@@ -18,6 +24,8 @@ import com.kinetic.keyboard.suggest.UserDictionary
 import com.kinetic.keyboard.text.BanglaTextValidator
 import com.kinetic.keyboard.ui.KeyAction
 import com.kinetic.keyboard.ui.KeyboardScreen
+import com.kinetic.keyboard.ui.theme.KbTheme
+import com.kinetic.keyboard.ui.theme.ThemeMode
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,10 +49,17 @@ class KeyboardImeService : InputMethodService() {
     private lateinit var suggestionManager: SuggestionManager
     private val suggestions = MutableStateFlow<List<String>>(emptyList())
 
+    private lateinit var prefsRepo: PrefsRepository
+    @Volatile private var currentPrefs = KeyboardPrefs()
+    private var keyboardView: View? = null
+
     override fun onCreate() {
         super.onCreate()
         lifecycleOwner.onCreate()
         stateMachine = KeyboardStateMachine(LayoutRepository(this))
+
+        prefsRepo = PrefsRepository(this)
+        scope.launch { prefsRepo.prefs.collect { currentPrefs = it } }
 
         val userDict = UserDictionary(File(filesDir, "user_dict.tsv"))
         suggestionManager = SuggestionManager(userDict = userDict)
@@ -63,14 +78,23 @@ class KeyboardImeService : InputMethodService() {
             setContent {
                 val ui by stateMachine.state.collectAsState()
                 val words by suggestions.collectAsState()
+                val prefs by prefsRepo.prefs.collectAsState(initial = currentPrefs)
+                val theme = when (prefs.themeMode) {
+                    ThemeMode.LIGHT -> KbTheme.Light
+                    ThemeMode.DARK -> KbTheme.Dark
+                    ThemeMode.SYSTEM -> if (isSystemInDarkTheme()) KbTheme.Dark else KbTheme.Light
+                }
                 KeyboardScreen(
                     ui = ui,
                     suggestions = words,
+                    theme = theme,
+                    keyHeight = prefs.keyHeightDp.dp,
                     onAction = ::handleAction,
                     onSuggestion = ::commitSuggestion,
                 )
             }
         }
+        keyboardView = composeView
         // Compose resolves its Recomposer by walking up from the WINDOW'S ROOT view, not from the
         // ComposeView itself — the owners must be visible from the IME dialog's decorView or
         // composition dies with "ViewTreeLifecycleOwner not found" (found the hard way on-device).
@@ -79,8 +103,26 @@ class KeyboardImeService : InputMethodService() {
         return composeView
     }
 
+    /** P5.4: key feedback, honoring the user's toggles. */
+    private fun feedback(action: KeyAction) {
+        if (currentPrefs.haptics) {
+            keyboardView?.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        }
+        if (currentPrefs.sound) {
+            val am = getSystemService(AUDIO_SERVICE) as AudioManager
+            val fx = when (action) {
+                KeyAction.Delete -> AudioManager.FX_KEYPRESS_DELETE
+                KeyAction.Space -> AudioManager.FX_KEYPRESS_SPACEBAR
+                KeyAction.Enter -> AudioManager.FX_KEYPRESS_RETURN
+                else -> AudioManager.FX_KEYPRESS_STANDARD
+            }
+            am.playSoundEffect(fx, 1.0f)
+        }
+    }
+
     private fun handleAction(action: KeyAction) {
         val ic = currentInputConnection ?: return
+        feedback(action)
         when (action) {
             is KeyAction.Text -> {
                 // P3.5: in phonetic mode, Roman letters stream through the transliterator.

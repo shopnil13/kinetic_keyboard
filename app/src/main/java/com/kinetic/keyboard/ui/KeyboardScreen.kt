@@ -1,6 +1,8 @@
 package com.kinetic.keyboard.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,12 +21,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +32,7 @@ import androidx.compose.ui.window.Popup
 import com.kinetic.keyboard.engine.KeyboardUiState
 import com.kinetic.keyboard.engine.model.KeyDef
 import com.kinetic.keyboard.engine.model.KeyTypes
+import com.kinetic.keyboard.ui.theme.KbTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -48,18 +49,6 @@ sealed interface KeyAction {
     data object CycleLanguage : KeyAction
 }
 
-private object KbColors {
-    val background = Color(0xFF141414)
-    val key = Color(0xFF3B3B3B)
-    val keyModifier = Color(0xFF262626)
-    val keyPressed = Color(0xFF5A5A5A)
-    val label = Color.White
-    val hint = Color(0xFFB0B0B0)
-    val popupBg = Color(0xFF4A4A4A)
-    val accent = Color(0xFF4FC3F7)
-}
-
-private val KeyHeight = 72.dp
 private const val REPEAT_INITIAL_MS = 350L
 private const val REPEAT_INTERVAL_MS = 50L
 
@@ -67,18 +56,21 @@ private const val REPEAT_INTERVAL_MS = 50L
 fun KeyboardScreen(
     ui: KeyboardUiState,
     suggestions: List<String>,
+    theme: KbTheme,
+    keyHeight: Dp,
     onAction: (KeyAction) -> Unit,
     onSuggestion: (String) -> Unit,
 ) {
-    Surface(color = KbColors.background) {
+    Surface(color = theme.background) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 1.dp, vertical = 3.dp)) {
             SuggestionStrip(
                 suggestions = suggestions,
+                theme = theme,
                 onSuggestion = onSuggestion,
                 onPunctuation = { onAction(KeyAction.Text(it)) },
             )
             ui.layout.rows.forEach { row ->
-                Row(Modifier.fillMaxWidth().height(KeyHeight)) {
+                Row(Modifier.fillMaxWidth().height(keyHeight)) {
                     var used = 0f
                     row.keys.forEach { key ->
                         if (key.gap > 0f) {
@@ -86,7 +78,7 @@ fun KeyboardScreen(
                             used += key.gap
                         }
                         val w = key.widthOrDefault()
-                        KeyView(key, ui, onAction, Modifier.weight(w))
+                        KeyView(key, ui, theme, keyHeight, onAction, Modifier.weight(w))
                         used += w
                     }
                     if (used < 99.5f) Spacer(Modifier.weight(100f - used))
@@ -100,6 +92,8 @@ fun KeyboardScreen(
 private fun KeyView(
     key: KeyDef,
     ui: KeyboardUiState,
+    theme: KbTheme,
+    keyHeight: Dp,
     onAction: (KeyAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -107,7 +101,7 @@ private fun KeyView(
     var popupOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val isModifierKey = key.type != KeyTypes.CHAR
-    val popupYOffset = with(LocalDensity.current) { -(KeyHeight + 8.dp).roundToPx() }
+    val popupYOffset = with(LocalDensity.current) { -(keyHeight + 8.dp).roundToPx() }
 
     val label = when (key.type) {
         KeyTypes.SHIFT -> if (ui.capsLock) "⇪" else if (ui.shiftVisual) "⬆" else "⇧"
@@ -193,9 +187,9 @@ private fun KeyView(
             .padding(horizontal = 1.5.dp, vertical = 2.dp)
             .background(
                 when {
-                    pressed -> KbColors.keyPressed
-                    isModifierKey && key.type != KeyTypes.SPACE -> KbColors.keyModifier
-                    else -> KbColors.key
+                    pressed -> theme.keyPressed
+                    isModifierKey && key.type != KeyTypes.SPACE -> theme.keyModifier
+                    else -> theme.key
                 },
                 RoundedCornerShape(7.dp),
             )
@@ -204,7 +198,7 @@ private fun KeyView(
     ) {
         Text(
             text = label,
-            color = if (key.type == KeyTypes.SHIFT && ui.shiftVisual) KbColors.accent else KbColors.label,
+            color = if (key.type == KeyTypes.SHIFT && ui.shiftVisual) theme.accent else theme.label,
             fontSize = if (key.type == KeyTypes.SPACE) 14.sp else 24.sp,
             textAlign = TextAlign.Center,
         )
@@ -212,7 +206,7 @@ private fun KeyView(
         if (key.popup.isNotEmpty()) {
             Text(
                 text = key.popup.first(),
-                color = KbColors.hint,
+                color = theme.hint,
                 fontSize = 10.sp,
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 5.dp),
             )
@@ -225,13 +219,13 @@ private fun KeyView(
             ) {
                 Row(
                     Modifier
-                        .background(KbColors.popupBg, RoundedCornerShape(8.dp))
+                        .background(theme.popupBg, RoundedCornerShape(8.dp))
                         .padding(horizontal = 4.dp, vertical = 6.dp),
                 ) {
                     key.popup.forEach { alt ->
                         Text(
                             text = alt,
-                            color = KbColors.label,
+                            color = theme.label,
                             fontSize = 22.sp,
                             modifier = Modifier
                                 .pointerInput(alt) {

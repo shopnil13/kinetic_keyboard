@@ -316,7 +316,7 @@ This is the single source of truth for build progress. Every unit of work is a t
 | P2 | Bengali correctness core | 1 wk | 🟡 code + tests green; on-device QA pending | Golden corpus passes; cluster backspace works |
 | P3 | Banglish phonetic (port) | 1–2 wk | 🟡 ported + corpus green; refactor (P3.6) & candidates (P3.7→P4) open | Kotlin output == reference behavior on corpus |
 | P4 | Suggestions / prediction / autocorrect | 2 wk | 🟡 strip + dictionaries live in all 3 modes; n-gram (P4.6) & autocorrect (P4.7) pending | Relevant suggestions in all 3 modes |
-| P5 | Parity polish (themes, emoji, settings, …) | ongoing | 🔴 | P1.2 feature set complete |
+| P5 | Parity polish (themes, emoji, settings, …) | ongoing | 🟡 settings + themes + feedback live; emoji/clipboard/gestures open | P1.2 feature set complete |
 | P6 | Hardening & release | 1–2 wk | 🔴 | Passes device matrix; shippable build |
 
 Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
@@ -415,10 +415,10 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 ### P5 — Parity polish (match/beat Gboard)
 *Goal: the §1.2 feature set. Each item is independently shippable; prioritize P1-tier first.*
 
-- [ ] **P5.1** Settings app — Compose Activity + DataStore (layouts, theme, feedback, digit script §12 Q2). *DoD: settings persist & take effect live.*
-- [ ] **P5.2** Theme system — light/dark + custom, `ThemeRepository`, wallpaper-adaptive option. *DoD: theme switch with no restart.* `deps: P1.9`
-- [ ] **P5.3** Sizing prefs — key height, number-row toggle, punctuation-strip toggle, one-handed offset. *DoD: layout responds live.* `deps: P5.1`
-- [ ] **P5.4** Feedback — haptics, key sound, key-preview popup (all toggleable). *DoD: honors system + app settings.*
+- [x] **P5.1** Settings — MainActivity is now a Compose settings screen backed by DataStore (`PrefsRepository`): theme mode, key height slider (52–88dp), haptics, sound. Changes apply live in the IME. *Verified on emulator.*
+- [~] **P5.2** Theme system — `KbTheme` palettes: Dark (reference-photo look) + Light + follow-system; instant switch, no restart. *Verified. Custom/wallpaper-adaptive themes still open.* `deps: P1.9`
+- [~] **P5.3** Sizing prefs — key height live from settings. *Number-row toggle, punctuation-strip toggle, one-handed offset still open.* `deps: P5.1`
+- [x] **P5.4** Feedback — haptics (KEYBOARD_TAP) + key sound (standard/delete/space/return effects), both toggleable, off-by-default sound. *Done.*
 - [ ] **P5.5** Emoji panel — categories, recents, skin tones, search, emoji suggestions. *DoD: inserts emoji; recents persist.* `deps: P1.9`
 - [ ] **P5.6** Clipboard manager — Room-backed history, pin, auto-expire. *DoD: copy→appears→paste; expiry works.*
 - [ ] **P5.7** Voice input — delegate to system speech recognizer via the mic key. *DoD: dictation inserts text.*
