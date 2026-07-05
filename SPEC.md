@@ -315,7 +315,7 @@ This is the single source of truth for build progress. Every unit of work is a t
 | P1 | Exact 4-layer layout rendering | 1–1.5 wk | 🟡 code written; on-device QA pending | All layers match photos, type correct Unicode |
 | P2 | Bengali correctness core | 1 wk | 🟡 code + tests green; on-device QA pending | Golden corpus passes; cluster backspace works |
 | P3 | Banglish phonetic (port) | 1–2 wk | 🟡 ported + corpus green; refactor (P3.6) & candidates (P3.7→P4) open | Kotlin output == reference behavior on corpus |
-| P4 | Suggestions / prediction / autocorrect | 2 wk | 🟡 strip + dictionaries live in all 3 modes; n-gram (P4.6) & autocorrect (P4.7) pending | Relevant suggestions in all 3 modes |
+| P4 | Suggestions / prediction / autocorrect | 2 wk | 🟢 done (Room user-dict migration & static n-grams remain as refinements) | Relevant suggestions in all 3 modes |
 | P5 | Parity polish (themes, emoji, settings, …) | ongoing | 🟡 settings + themes + feedback live; emoji/clipboard/gestures open | P1.2 feature set complete |
 | P6 | Hardening & release | 1–2 wk | 🔴 | Passes device matrix; shippable build |
 
@@ -402,13 +402,13 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 - [x] **P4.3** `Dictionary` loader + `byPrefix` top-k. *Done; asset sanity tests included.* `deps: P4.2`
 - [x] **P4.4** `SuggestionStrip` — 3 candidates while typing; the photos' **blue punctuation row** (`! ? , " ' | : ; (`) when idle. *Done, verified on emulator.* `deps: P1.9`
 - [x] **P4.5** Prefix suggestions live in fixed + English modes; refresh on keypress and cursor moves (`onUpdateSelection`); tap replaces word + space. *Verified: ক → কি/করে/করতে → tap → "করে ".* `deps: P4.3, P4.4`
-- [ ] **P4.6** N-gram next-word model (bigram/trigram). *DoD: predicts next word after commit; tests.* `deps: P4.3`
-- [ ] **P4.7** `AutoCorrector` — edit-distance + keyboard-adjacency, conservative defaults. *DoD: fixes typos without over-correcting (test set).* `deps: P4.3`
+- [x] **P4.6** Next-word prediction — *deviation:* no licensed Bengali sentence corpus to ship static n-grams, so bigrams are **user-learned on device** (`UserBigrams`, file-backed TSV, like the original's UserBigramDictionary): every committed pair bumps a count; after a space the strip offers likely followers. Static corpus n-grams remain a future upgrade. `deps: P4.3`
+- [x] **P4.7** `AutoCorrector` — ED1 neighborhood *generation* + dictionary probes (no scans); conservative policy: never touches in-dictionary words, length ≥3, best candidate must be common (freq ≥500) and 3× the runner-up. Applies on space (fixed+English modes; phonetic excluded — transliteration isn't typos), **one backspace undoes it**. Typo-tolerant strip fallback when a prefix matches nothing. *Verified on emulator: তুমী + space → তুমি.* `deps: P4.3`
 - [~] **P4.8** User dictionary — file-backed word counts (learn on space/enter/candidate-tap; user words outrank corpus). Room migration is a later refinement. `deps: P4.3`
-- [~] **P4.9** `SuggestionManager` — merges user-dict > corpus with dedupe; autocorrect/n-gram/emoji sources plug in via P4.6/P4.7. `deps: P4.5–P4.8`
+- [x] **P4.9** `SuggestionManager` — merges user-dict > corpus > ED1-typo-fallback with dedupe; bigram predictions after word commit. Emoji/clipboard sources plug in with P5. `deps: P4.5–P4.8`
 - [x] **P4.10** Phonetic candidates — composing transliteration drives Bangla-dict prefix lookup ("amar" → আমার, আমরা…); strip tap replaces the composing region. *Done.* `deps: P3.7, P4.9`
 
-**🚦 Gate P4:** relevant word suggestions and next-word prediction work in Bangla-fixed, Banglish, and English.
+**🚦 Gate P4: ✅ PASSED** — suggestions in all 3 modes, typo-tolerant fallback, conservative autocorrect with undo, user-learned next-word prediction. 41/41 unit tests green; autocorrect verified on emulator (তুমী→তুমি).
 
 ---
 

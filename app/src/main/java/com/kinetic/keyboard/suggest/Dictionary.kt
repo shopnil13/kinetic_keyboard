@@ -18,6 +18,11 @@ class Dictionary private constructor(
 ) {
     val size: Int get() = words.size
 
+    /** Distinct characters used by this dictionary's words (drives ED1 candidate generation). */
+    val alphabet: CharArray by lazy {
+        words.asSequence().flatMap { it.asSequence() }.distinct().toList().toCharArray()
+    }
+
     fun frequencyOf(word: String): Int {
         val i = words.binarySearch(word)
         return if (i >= 0) freqs[i] else 0

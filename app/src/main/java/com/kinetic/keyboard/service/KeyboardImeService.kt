@@ -20,6 +20,7 @@ import com.kinetic.keyboard.engine.LayoutRepository
 import com.kinetic.keyboard.input.PhoneticComposer
 import com.kinetic.keyboard.suggest.Dictionary
 import com.kinetic.keyboard.suggest.SuggestionManager
+import com.kinetic.keyboard.suggest.UserBigrams
 import com.kinetic.keyboard.suggest.UserDictionary
 import com.kinetic.keyboard.text.BanglaTextValidator
 import com.kinetic.keyboard.ui.KeyAction
@@ -53,6 +54,12 @@ class KeyboardImeService : InputMethodService() {
     @Volatile private var currentPrefs = KeyboardPrefs()
     private var keyboardView: View? = null
 
+    /** Last word committed by space/enter/candidate — feeds bigram learning + prediction. */
+    private var lastCommittedWord: String = ""
+
+    /** Set right after an autocorrect so one backspace can undo it (original, corrected). */
+    private var pendingUndo: Pair<String, String>? = null
+
     override fun onCreate() {
         super.onCreate()
         lifecycleOwner.onCreate()
@@ -62,9 +69,11 @@ class KeyboardImeService : InputMethodService() {
         scope.launch { prefsRepo.prefs.collect { currentPrefs = it } }
 
         val userDict = UserDictionary(File(filesDir, "user_dict.tsv"))
-        suggestionManager = SuggestionManager(userDict = userDict)
+        val bigrams = UserBigrams(File(filesDir, "user_bigrams.tsv"))
+        suggestionManager = SuggestionManager(userDict = userDict, bigrams = bigrams)
         scope.launch(Dispatchers.IO) {
             userDict.load()
+            bigrams.load()
             suggestionManager.bangla =
                 assets.open("dict/bn.tsv").bufferedReader().use(Dictionary.Companion::load)
             suggestionManager.english =
@@ -124,6 +133,8 @@ class KeyboardImeService : InputMethodService() {
     private fun handleAction(action: KeyAction) {
         val ic = currentInputConnection ?: return
         feedback(action)
+        // An autocorrect is only undoable by the immediately following backspace.
+        if (action != KeyAction.Delete) pendingUndo = null
         when (action) {
             is KeyAction.Text -> {
                 // P3.5: in phonetic mode, Roman letters stream through the transliterator.
@@ -141,8 +152,28 @@ class KeyboardImeService : InputMethodService() {
                 }
             }
             KeyAction.Space -> {
-                learnCurrentWord(ic)
+                val word = wordBeforeCursor(ic)
                 commitComposing(ic)
+                var committed = word
+                // P4.7: conservative autocorrect on word commit (not in phonetic mode — its
+                // output is deterministic transliteration, not typos).
+                if (word.isNotEmpty() && stateMachine.state.value.inputMode != InputMode.PHONETIC) {
+                    val useBangla = stateMachine.state.value.inputMode != InputMode.LATIN
+                    val corrected = suggestionManager.corrector(useBangla).correct(word)
+                    if (corrected != null) {
+                        ic.deleteSurroundingText(word.length, 0)
+                        ic.commitText(corrected, 1)
+                        pendingUndo = word to corrected
+                        committed = corrected
+                    }
+                }
+                if (committed.length >= 2) {
+                    suggestionManager.userDict?.learn(committed)
+                    if (lastCommittedWord.isNotEmpty()) {
+                        suggestionManager.bigrams?.learn(lastCommittedWord, committed) // P4.6
+                    }
+                }
+                if (committed.isNotEmpty()) lastCommittedWord = committed
                 ic.commitText(" ", 1)
                 stateMachine.onCharCommitted()
             }
@@ -175,41 +206,52 @@ class KeyboardImeService : InputMethodService() {
         }
     }
 
+    /** The word being typed at the cursor (composing transliteration in phonetic mode). */
+    private fun wordBeforeCursor(ic: InputConnection): String = if (phonetic.isComposing) {
+        phonetic.current()
+    } else {
+        SuggestionManager.currentWord(ic.getTextBeforeCursor(48, 0) ?: "")
+    }
+
     /** P4: strip tap — replace the word being typed and learn it. */
     private fun commitSuggestion(word: String) {
         val ic = currentInputConnection ?: return
         if (phonetic.isComposing) {
             phonetic.reset() // commitText below replaces the composing region
         } else {
-            val before = ic.getTextBeforeCursor(48, 0) ?: ""
-            val current = SuggestionManager.currentWord(before)
+            val current = SuggestionManager.currentWord(ic.getTextBeforeCursor(48, 0) ?: "")
             if (current.isNotEmpty()) ic.deleteSurroundingText(current.length, 0)
         }
         ic.commitText("$word ", 1)
         suggestionManager.userDict?.learn(word)
+        if (lastCommittedWord.isNotEmpty()) suggestionManager.bigrams?.learn(lastCommittedWord, word)
+        lastCommittedWord = word
         stateMachine.onCharCommitted()
         updateSuggestions(ic)
     }
 
-    /** P4.8: words the user finishes (space/enter) feed the user dictionary. */
+    /** P4.8: words the user finishes with enter feed the user dictionary. */
     private fun learnCurrentWord(ic: InputConnection) {
-        val word = if (phonetic.isComposing) {
-            phonetic.current()
-        } else {
-            SuggestionManager.currentWord(ic.getTextBeforeCursor(48, 0) ?: "")
-        }
+        val word = wordBeforeCursor(ic)
         if (word.length >= 2) suggestionManager.userDict?.learn(word)
     }
 
     /** P4.5/P4.10: recompute strip candidates for the word at the cursor. */
     private fun updateSuggestions(ic: InputConnection) {
         val mode = stateMachine.state.value.inputMode
-        val prefix = if (phonetic.isComposing) {
-            phonetic.current()
+        val prefix = wordBeforeCursor(ic)
+        suggestions.value = if (prefix.isEmpty()) {
+            // P4.6: just finished a word? Offer likely next words from learned bigrams.
+            val before = ic.getTextBeforeCursor(48, 0) ?: ""
+            if (before.isNotEmpty() && before.last() == ' ') {
+                val prev = SuggestionManager.currentWord(before.toString().trimEnd())
+                suggestionManager.predictNext(prev)
+            } else {
+                emptyList()
+            }
         } else {
-            SuggestionManager.currentWord(ic.getTextBeforeCursor(48, 0) ?: "")
+            suggestionManager.suggest(prefix, useBangla = mode != InputMode.LATIN)
         }
-        suggestions.value = suggestionManager.suggest(prefix, useBangla = mode != InputMode.LATIN)
     }
 
     /**
@@ -220,6 +262,18 @@ class KeyboardImeService : InputMethodService() {
      */
     private fun handleDelete() {
         val ic = currentInputConnection ?: return
+        // P4.7: one backspace right after an autocorrect reverts it (corrected+space → original).
+        pendingUndo?.let { (original, corrected) ->
+            pendingUndo = null
+            val tail = ic.getTextBeforeCursor(corrected.length + 1, 0) ?: ""
+            if (tail.toString() == "$corrected " || tail.toString().endsWith("$corrected ")) {
+                ic.deleteSurroundingText(corrected.length + 1, 0)
+                ic.commitText(original, 1)
+                lastCommittedWord = ""
+                updateSuggestions(ic)
+                return
+            }
+        }
         // P3.5: while composing Banglish, backspace edits the Roman buffer, not the Bangla text.
         if (phonetic.isComposing) {
             val text = phonetic.deleteLast()
@@ -261,13 +315,18 @@ class KeyboardImeService : InputMethodService() {
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         lifecycleOwner.onResume()
+        lastCommittedWord = ""
+        pendingUndo = null
         currentInputConnection?.let { updateSuggestions(it) }
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         phonetic.reset() // never carry a half-typed word across fields
         suggestions.value = emptyList()
-        scope.launch(Dispatchers.IO) { suggestionManager.userDict?.saveIfDirty() }
+        scope.launch(Dispatchers.IO) {
+            suggestionManager.userDict?.saveIfDirty()
+            suggestionManager.bigrams?.saveIfDirty()
+        }
         lifecycleOwner.onPause()
         super.onFinishInputView(finishingInput)
     }
