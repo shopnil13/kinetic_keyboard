@@ -4,14 +4,14 @@
     { "keys": [
       { "label": "ঙ", "popup": ["১"] },
       { "label": "য", "popup": ["২"] },
-      { "label": "ড", "popup": ["ঢ", "৩"] },
-      { "label": "প", "popup": ["ফ", "৪"] },
-      { "label": "ট", "popup": ["ঠ", "৫"] },
-      { "label": "চ", "popup": ["ছ", "৬"] },
-      { "label": "জ", "popup": ["ঝ", "৭"] },
-      { "label": "হ", "popup": ["ঞ", "৮"] },
-      { "label": "গ", "popup": ["ঘ", "৯"] },
-      { "label": "ড়", "popup": ["ঢ়", "০"] }
+      { "label": "ড", "popup": ["৩", "ঢ"] },
+      { "label": "প", "popup": ["৪", "ফ"] },
+      { "label": "ট", "popup": ["৫", "ঠ"] },
+      { "label": "চ", "popup": ["৬", "ছ"] },
+      { "label": "জ", "popup": ["৭", "ঝ"] },
+      { "label": "হ", "popup": ["৮", "ঞ"] },
+      { "label": "গ", "popup": ["৯", "ঘ"] },
+      { "label": "ড়", "popup": ["০", "ঢ়"] }
     ]},
     { "keys": [
       { "label": "ৃ", "popup": ["ঋ"], "gap": 5 },

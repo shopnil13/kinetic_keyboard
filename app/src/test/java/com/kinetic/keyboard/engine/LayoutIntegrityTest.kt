@@ -63,11 +63,12 @@ class LayoutIntegrityTest {
     }
 
     @Test
-    fun `popups carry shift-consonant plus bengali digit`() {
+    fun `popups carry bengali digit first then shift-consonant`() {
+        // User decision (2026-07-05): digit first so the hint superscript shows the digit.
         val row1 = load("bn_unijoy").rows[0].keys
-        assertEquals(listOf("ঢ", "৩"), row1[2].popup) // ড
-        assertEquals(listOf("ফ", "৪"), row1[3].popup) // প
-        assertEquals(listOf("ঢ়", "০"), row1[9].popup) // ড়
+        assertEquals(listOf("৩", "ঢ"), row1[2].popup) // ড
+        assertEquals(listOf("৪", "ফ"), row1[3].popup) // প
+        assertEquals(listOf("০", "ঢ়"), row1[9].popup) // ড়
     }
 
     @Test

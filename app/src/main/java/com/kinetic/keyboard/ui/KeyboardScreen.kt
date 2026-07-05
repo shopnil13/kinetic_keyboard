@@ -102,6 +102,10 @@ private fun KeyView(
     val scope = rememberCoroutineScope()
     val isModifierKey = key.type != KeyTypes.CHAR
     val popupYOffset = with(LocalDensity.current) { -(keyHeight + 8.dp).roundToPx() }
+    // Glyphs scale with key height so taller keys genuinely look bigger
+    // (24sp at the 72dp default), not just more padded.
+    val glyphSize = (keyHeight.value * 0.34f).sp
+    val hintSize = (keyHeight.value * 0.15f).sp
 
     val label = when (key.type) {
         KeyTypes.SHIFT -> if (ui.capsLock) "⇪" else if (ui.shiftVisual) "⬆" else "⇧"
@@ -199,7 +203,7 @@ private fun KeyView(
         Text(
             text = label,
             color = if (key.type == KeyTypes.SHIFT && ui.shiftVisual) theme.accent else theme.label,
-            fontSize = if (key.type == KeyTypes.SPACE) 14.sp else 24.sp,
+            fontSize = if (key.type == KeyTypes.SPACE) 14.sp else glyphSize,
             textAlign = TextAlign.Center,
         )
         // Long-press hint: first popup char, top-right corner (matches the original's superscripts).
@@ -207,7 +211,7 @@ private fun KeyView(
             Text(
                 text = key.popup.first(),
                 color = theme.hint,
-                fontSize = 10.sp,
+                fontSize = hintSize,
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 5.dp),
             )
         }
