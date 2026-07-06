@@ -4,8 +4,10 @@ import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
 import android.view.HapticFeedbackConstants
 import android.view.View
+import android.text.InputType
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -192,8 +194,26 @@ class KeyboardImeService : InputMethodService() {
                 commitComposing(ic)
                 stateMachine.cycleLanguage()
             }
+            KeyAction.ShowImePicker -> {
+                commitComposing(ic)
+                (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
+            }
         }
         updateSuggestions(ic)
+        // A manual shift tap is the user overriding caps — don't immediately fight it.
+        if (action != KeyAction.Shift) updateAutoCaps(ic)
+    }
+
+    /**
+     * Gboard-style auto-capitalization: at a sentence start (per the field's declared caps
+     * mode) engage one-shot shift. English only — Bangla has no case, and in phonetic mode
+     * capital Roman letters are distinct phonemes the user must control manually.
+     */
+    private fun updateAutoCaps(ic: InputConnection) {
+        if (stateMachine.state.value.inputMode != InputMode.LATIN) return
+        val inputType = currentInputEditorInfo?.inputType ?: return
+        if (inputType == InputType.TYPE_NULL) return
+        stateMachine.setAutoShift(ic.getCursorCapsMode(inputType) != 0)
     }
 
     private fun isRomanLetter(s: String) = s.length == 1 && (s[0] in 'a'..'z' || s[0] in 'A'..'Z')
@@ -309,7 +329,10 @@ class KeyboardImeService : InputMethodService() {
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         // Cursor moved (tap, selection): refresh the strip for the word now at the cursor.
-        currentInputConnection?.let { if (!phonetic.isComposing) updateSuggestions(it) }
+        currentInputConnection?.let {
+            if (!phonetic.isComposing) updateSuggestions(it)
+            updateAutoCaps(it)
+        }
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -317,7 +340,10 @@ class KeyboardImeService : InputMethodService() {
         lifecycleOwner.onResume()
         lastCommittedWord = ""
         pendingUndo = null
-        currentInputConnection?.let { updateSuggestions(it) }
+        currentInputConnection?.let {
+            updateSuggestions(it)
+            updateAutoCaps(it)
+        }
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {

@@ -7,10 +7,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -51,6 +54,9 @@ sealed interface KeyAction {
     data object Shift : KeyAction
     data class LayerSwitch(val target: String) : KeyAction
     data object CycleLanguage : KeyAction
+
+    /** Long-press on space: open the system input-method picker (switch keyboards). */
+    data object ShowImePicker : KeyAction
 }
 
 private const val REPEAT_INITIAL_MS = 350L
@@ -76,7 +82,14 @@ fun KeyboardScreen(
     }
     CompositionLocalProvider(LocalViewConfiguration provides tuned) {
         Surface(color = theme.background) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 1.dp, vertical = 3.dp)) {
+            // targetSdk 35 makes the IME window edge-to-edge: without this padding the bottom
+            // row sits under the system nav bar and its keyboard-dismiss chevron covers ?123.
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = 1.dp, vertical = 3.dp),
+            ) {
                 SuggestionStrip(
                     suggestions = suggestions,
                     theme = theme,
@@ -162,6 +175,7 @@ private fun KeyView(
                 detectTapGestures(
                     onPress = { pressed = true; tryAwaitRelease(); pressed = false },
                     onTap = { onAction(KeyAction.Space) },
+                    onLongPress = { onAction(KeyAction.ShowImePicker) },
                 )
             }
             .pointerInput(Unit) {

@@ -111,6 +111,20 @@ class KeyboardStateMachine(
         }
     }
 
+    /**
+     * Gboard-style auto-capitalization: engage/release one-shot shift from the editor's cursor
+     * caps mode (sentence start etc.). Only meaningful on case-transform layouts (English);
+     * never touches caps lock or the Bangla shift layer.
+     */
+    fun setAutoShift(enabled: Boolean) {
+        if (capsLock) return
+        val current = _state.value.layout
+        if (!current.caseTransformOnShift) return
+        if (shifted == enabled) return
+        shifted = enabled
+        show(current.id)
+    }
+
     /** Call after a character/space commit: releases one-shot shift unless caps-locked. */
     fun onCharCommitted() {
         if (capsLock) return
