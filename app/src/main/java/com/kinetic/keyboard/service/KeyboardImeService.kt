@@ -158,8 +158,10 @@ class KeyboardImeService : InputMethodService() {
                 commitComposing(ic)
                 var committed = word
                 // P4.7: conservative autocorrect on word commit (not in phonetic mode — its
-                // output is deterministic transliteration, not typos).
-                if (word.isNotEmpty() && stateMachine.state.value.inputMode != InputMode.PHONETIC) {
+                // output is deterministic transliteration, not typos; never in private fields).
+                if (word.isNotEmpty() && !isPrivateField() &&
+                    stateMachine.state.value.inputMode != InputMode.PHONETIC
+                ) {
                     val useBangla = stateMachine.state.value.inputMode != InputMode.LATIN
                     val corrected = suggestionManager.corrector(useBangla).correct(word)
                     if (corrected != null) {
@@ -169,7 +171,7 @@ class KeyboardImeService : InputMethodService() {
                         committed = corrected
                     }
                 }
-                if (committed.length >= 2) {
+                if (committed.length >= 2 && !isPrivateField()) {
                     suggestionManager.userDict?.learn(committed)
                     if (lastCommittedWord.isNotEmpty()) {
                         suggestionManager.bigrams?.learn(lastCommittedWord, committed) // P4.6
@@ -218,6 +220,26 @@ class KeyboardImeService : InputMethodService() {
 
     private fun isRomanLetter(s: String) = s.length == 1 && (s[0] in 'a'..'z' || s[0] in 'A'..'Z')
 
+    /**
+     * P6.4 (privacy): password / no-suggestion fields must never feed the user dictionary or
+     * bigrams, never get autocorrected, and never show suggestions — see PRIVACY.md.
+     */
+    private fun isPrivateField(): Boolean {
+        val type = currentInputEditorInfo?.inputType ?: return false
+        val cls = type and InputType.TYPE_MASK_CLASS
+        val variation = type and InputType.TYPE_MASK_VARIATION
+        return when (cls) {
+            InputType.TYPE_CLASS_TEXT ->
+                variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                    variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+                    variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
+                    (type and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0
+            InputType.TYPE_CLASS_NUMBER ->
+                variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            else -> false
+        }
+    }
+
     /** Finalize any pending phonetic composition (word boundary). */
     private fun commitComposing(ic: InputConnection) {
         if (phonetic.isComposing) {
@@ -252,12 +274,17 @@ class KeyboardImeService : InputMethodService() {
 
     /** P4.8: words the user finishes with enter feed the user dictionary. */
     private fun learnCurrentWord(ic: InputConnection) {
+        if (isPrivateField()) return
         val word = wordBeforeCursor(ic)
         if (word.length >= 2) suggestionManager.userDict?.learn(word)
     }
 
     /** P4.5/P4.10: recompute strip candidates for the word at the cursor. */
     private fun updateSuggestions(ic: InputConnection) {
+        if (isPrivateField()) {
+            suggestions.value = emptyList()
+            return
+        }
         val mode = stateMachine.state.value.inputMode
         val prefix = wordBeforeCursor(ic)
         suggestions.value = if (prefix.isEmpty()) {
