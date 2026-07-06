@@ -38,9 +38,9 @@
     ]},
     { "keys": [
       { "type": "layerSwitch", "target": "symbols", "label": "?123", "width": 20 },
-      { "label": "," },
+      { "type": "emoji", "label": "😊" },
       { "type": "space", "width": 40 },
-      { "label": "." },
+      { "label": ".", "popup": [",", "?", "!", ":", ";"] },
       { "type": "enter", "width": 20 }
     ]}
   ]

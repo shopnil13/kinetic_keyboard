@@ -14,8 +14,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
+import android.graphics.Paint
 import com.kinetic.keyboard.data.KeyboardPrefs
 import com.kinetic.keyboard.data.PrefsRepository
+import com.kinetic.keyboard.emoji.EmojiCatalog
+import com.kinetic.keyboard.emoji.EmojiCategory
+import com.kinetic.keyboard.emoji.EmojiRecents
 import com.kinetic.keyboard.engine.InputMode
 import com.kinetic.keyboard.engine.KeyboardStateMachine
 import com.kinetic.keyboard.engine.LayoutRepository
@@ -62,6 +66,12 @@ class KeyboardImeService : InputMethodService() {
     /** Set right after an autocorrect so one backspace can undo it (original, corrected). */
     private var pendingUndo: Pair<String, String>? = null
 
+    // P5.5: emoji panel state — library, recents, open/closed.
+    private lateinit var emojiRecentsStore: EmojiRecents
+    private val emojiCategories = MutableStateFlow<List<EmojiCategory>>(emptyList())
+    private val emojiRecents = MutableStateFlow<List<String>>(emptyList())
+    private val emojiOpen = MutableStateFlow(false)
+
     override fun onCreate() {
         super.onCreate()
         lifecycleOwner.onCreate()
@@ -81,6 +91,14 @@ class KeyboardImeService : InputMethodService() {
             suggestionManager.english =
                 assets.open("dict/en.tsv").bufferedReader().use(Dictionary.Companion::load)
         }
+
+        emojiRecentsStore = EmojiRecents(File(filesDir, "emoji_recents.txt"))
+        scope.launch(Dispatchers.IO) {
+            emojiRecents.value = emojiRecentsStore.load()
+            val catalog = assets.open("emoji/emoji.tsv").bufferedReader().use(EmojiCatalog::parse)
+            val paint = Paint()
+            emojiCategories.value = EmojiCatalog.filterRenderable(catalog, paint::hasGlyph)
+        }
     }
 
     override fun onCreateInputView(): View {
@@ -90,6 +108,9 @@ class KeyboardImeService : InputMethodService() {
                 val ui by stateMachine.state.collectAsState()
                 val words by suggestions.collectAsState()
                 val prefs by prefsRepo.prefs.collectAsState(initial = currentPrefs)
+                val showEmoji by emojiOpen.collectAsState()
+                val categories by emojiCategories.collectAsState()
+                val recents by emojiRecents.collectAsState()
                 val theme = when (prefs.themeMode) {
                     ThemeMode.LIGHT -> KbTheme.Light
                     ThemeMode.DARK -> KbTheme.Dark
@@ -101,6 +122,9 @@ class KeyboardImeService : InputMethodService() {
                     theme = theme,
                     keyHeight = prefs.keyHeightDp.dp,
                     longPressMs = prefs.longPressMs,
+                    emojiOpen = showEmoji,
+                    emojiCategories = categories,
+                    emojiRecents = recents,
                     onAction = ::handleAction,
                     onSuggestion = ::commitSuggestion,
                 )
@@ -199,6 +223,16 @@ class KeyboardImeService : InputMethodService() {
             KeyAction.ShowImePicker -> {
                 commitComposing(ic)
                 (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
+            }
+            KeyAction.ToggleEmoji -> {
+                commitComposing(ic)
+                emojiOpen.value = !emojiOpen.value
+            }
+            is KeyAction.EmojiInput -> {
+                commitComposing(ic)
+                ic.commitText(action.emoji, 1)
+                emojiRecents.value = emojiRecentsStore.record(action.emoji)
+                scope.launch(Dispatchers.IO) { emojiRecentsStore.save() }
             }
         }
         updateSuggestions(ic)
@@ -367,6 +401,7 @@ class KeyboardImeService : InputMethodService() {
         lifecycleOwner.onResume()
         lastCommittedWord = ""
         pendingUndo = null
+        emojiOpen.value = false // a new field always starts on the letter keys
         currentInputConnection?.let {
             updateSuggestions(it)
             updateAutoCaps(it)

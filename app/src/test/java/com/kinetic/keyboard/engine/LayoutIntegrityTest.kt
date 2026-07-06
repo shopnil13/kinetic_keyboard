@@ -88,8 +88,18 @@ class LayoutIntegrityTest {
         listOf("bn_unijoy", "bn_unijoy_shift", "en_qwerty").forEach { id ->
             val bottom = load(id).rows.last().keys
             assertEquals(KeyTypes.LAYER_SWITCH, bottom[0].type)
+            assertEquals(KeyTypes.EMOJI, bottom[1].type) // P5.5: dedicated emoji key
             assertEquals(KeyTypes.SPACE, bottom[2].type)
             assertEquals(KeyTypes.ENTER, bottom[4].type)
+        }
+    }
+
+    @Test
+    fun `comma stays reachable after the emoji key took its spot`() {
+        // P5.5 moved "," off the bottom row; it must live in the punctuation key's popup.
+        listOf("bn_unijoy", "bn_unijoy_shift", "en_qwerty").forEach { id ->
+            val punctuation = load(id).rows.last().keys[3]
+            assertTrue("$id: ',' not in ${punctuation.label} popup", "," in punctuation.popup)
         }
     }
 }

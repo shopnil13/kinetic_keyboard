@@ -34,7 +34,9 @@ object LayoutParser {
                     KeyTypes.LAYER_SWITCH -> require(!key.target.isNullOrBlank()) {
                         "${layout.id} row $r: layerSwitch without target"
                     }
-                    KeyTypes.SHIFT, KeyTypes.BACKSPACE, KeyTypes.SPACE, KeyTypes.ENTER, KeyTypes.TAB -> Unit
+                    KeyTypes.SHIFT, KeyTypes.BACKSPACE, KeyTypes.SPACE, KeyTypes.ENTER,
+                    KeyTypes.TAB, KeyTypes.EMOJI,
+                    -> Unit
                     else -> error("${layout.id} row $r: unknown key type '${key.type}'")
                 }
             }

@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import com.kinetic.keyboard.emoji.EmojiCategory
 import com.kinetic.keyboard.engine.KeyboardUiState
 import com.kinetic.keyboard.engine.model.KeyDef
 import com.kinetic.keyboard.engine.model.KeyTypes
@@ -62,6 +63,12 @@ sealed interface KeyAction {
 
     /** Long-press on space: open the system input-method picker (switch keyboards). */
     data object ShowImePicker : KeyAction
+
+    /** P5.5: open/close the emoji panel. */
+    data object ToggleEmoji : KeyAction
+
+    /** P5.5: commit an emoji chosen from the panel. */
+    data class EmojiInput(val emoji: String) : KeyAction
 }
 
 private const val REPEAT_INITIAL_MS = 350L
@@ -74,6 +81,9 @@ fun KeyboardScreen(
     theme: KbTheme,
     keyHeight: Dp,
     longPressMs: Int,
+    emojiOpen: Boolean,
+    emojiCategories: List<EmojiCategory>,
+    emojiRecents: List<String>,
     onAction: (KeyAction) -> Unit,
     onSuggestion: (String) -> Unit,
 ) {
@@ -95,25 +105,38 @@ fun KeyboardScreen(
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(horizontal = 1.dp, vertical = 3.dp),
             ) {
-                SuggestionStrip(
-                    suggestions = suggestions,
-                    theme = theme,
-                    onSuggestion = onSuggestion,
-                    onPunctuation = { onAction(KeyAction.Text(it)) },
-                )
-                ui.layout.rows.forEach { row ->
-                    Row(Modifier.fillMaxWidth().height(keyHeight)) {
-                        var used = 0f
-                        row.keys.forEach { key ->
-                            if (key.gap > 0f) {
-                                Spacer(Modifier.weight(key.gap))
-                                used += key.gap
+                if (emojiOpen) {
+                    // Same total height as strip + key rows so the IME window doesn't jump.
+                    EmojiPanel(
+                        categories = emojiCategories,
+                        recents = emojiRecents,
+                        theme = theme,
+                        height = keyHeight * ui.layout.rows.size + 46.dp,
+                        onEmoji = { onAction(KeyAction.EmojiInput(it)) },
+                        onBack = { onAction(KeyAction.ToggleEmoji) },
+                        onDelete = { onAction(KeyAction.Delete) },
+                    )
+                } else {
+                    SuggestionStrip(
+                        suggestions = suggestions,
+                        theme = theme,
+                        onSuggestion = onSuggestion,
+                        onPunctuation = { onAction(KeyAction.Text(it)) },
+                    )
+                    ui.layout.rows.forEach { row ->
+                        Row(Modifier.fillMaxWidth().height(keyHeight)) {
+                            var used = 0f
+                            row.keys.forEach { key ->
+                                if (key.gap > 0f) {
+                                    Spacer(Modifier.weight(key.gap))
+                                    used += key.gap
+                                }
+                                val w = key.widthOrDefault()
+                                KeyView(key, ui, theme, keyHeight, onAction, Modifier.weight(w))
+                                used += w
                             }
-                            val w = key.widthOrDefault()
-                            KeyView(key, ui, theme, keyHeight, onAction, Modifier.weight(w))
-                            used += w
+                            if (used < 99.5f) Spacer(Modifier.weight(100f - used))
                         }
-                        if (used < 99.5f) Spacer(Modifier.weight(100f - used))
                     }
                 }
             }
@@ -170,6 +193,9 @@ private fun KeyView(
         KeyTypes.TAB -> {
             { onAction(KeyAction.Text("\t")) }
         }
+        KeyTypes.EMOJI -> {
+            { onAction(KeyAction.ToggleEmoji) }
+        }
         else -> null
     }
 
@@ -184,6 +210,7 @@ private fun KeyView(
         KeyTypes.ENTER -> "Enter"
         KeyTypes.SPACE -> "Space, language ${ui.spaceLabel}. Hold to switch keyboard"
         KeyTypes.TAB -> "Tab"
+        KeyTypes.EMOJI -> "Emoji"
         else -> null
     }
 
@@ -254,6 +281,12 @@ private fun KeyView(
             detectTapGestures(
                 onPress = { pressed = true; tryAwaitRelease(); pressed = false },
                 onTap = { onAction(KeyAction.Text("\t")) },
+            )
+        }
+        KeyTypes.EMOJI -> Modifier.pointerInput(Unit) {
+            detectTapGestures(
+                onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                onTap = { onAction(KeyAction.ToggleEmoji) },
             )
         }
         else -> Modifier

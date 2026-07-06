@@ -28,6 +28,7 @@ object KeyTypes {
     const val ENTER = "enter"
     const val LAYER_SWITCH = "layerSwitch" // `target` = layout id, or "letters" for current language base
     const val TAB = "tab"
+    const val EMOJI = "emoji" // opens the emoji panel (P5.5)
 }
 
 @Serializable
