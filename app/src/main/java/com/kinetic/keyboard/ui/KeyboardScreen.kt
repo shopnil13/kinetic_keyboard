@@ -30,6 +30,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -143,6 +148,45 @@ private fun KeyView(
         else -> if (ui.uppercase) key.label.uppercase() else key.label
     }
 
+    // P6.2: what a tap does, exposed to TalkBack as the click action — the raw pointerInput
+    // gestures below carry no semantics of their own.
+    val primaryTap: (() -> Unit)? = when (key.type) {
+        KeyTypes.CHAR -> {
+            { onAction(KeyAction.Text(key.outputText(ui.uppercase))) }
+        }
+        KeyTypes.BACKSPACE -> {
+            { onAction(KeyAction.Delete) }
+        }
+        KeyTypes.SPACE -> {
+            { onAction(KeyAction.Space) }
+        }
+        KeyTypes.SHIFT -> {
+            { onAction(KeyAction.Shift) }
+        }
+        KeyTypes.ENTER -> {
+            { onAction(KeyAction.Enter) }
+        }
+        KeyTypes.LAYER_SWITCH -> key.target?.let { t -> { onAction(KeyAction.LayerSwitch(t)) } }
+        KeyTypes.TAB -> {
+            { onAction(KeyAction.Text("\t")) }
+        }
+        else -> null
+    }
+
+    // P6.2: glyph labels (⇧ ⌫ ⏎) are meaningless to a screen reader — spell them out.
+    val a11yLabel = when (key.type) {
+        KeyTypes.SHIFT -> when {
+            ui.capsLock -> "Caps lock on"
+            ui.shiftVisual -> "Shift on"
+            else -> "Shift"
+        }
+        KeyTypes.BACKSPACE -> "Backspace"
+        KeyTypes.ENTER -> "Enter"
+        KeyTypes.SPACE -> "Space, language ${ui.spaceLabel}. Hold to switch keyboard"
+        KeyTypes.TAB -> "Tab"
+        else -> null
+    }
+
     val gestures = when (key.type) {
         KeyTypes.CHAR -> Modifier.pointerInput(key, ui.uppercase) {
             detectTapGestures(
@@ -219,6 +263,11 @@ private fun KeyView(
         modifier = modifier
             .fillMaxHeight() // fill the row — without this, caps wrap their text and leave row gaps
             .padding(horizontal = 1.5.dp, vertical = 2.dp)
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                a11yLabel?.let { contentDescription = it }
+                primaryTap?.let { tap -> onClick { tap(); true } }
+            }
             .background(
                 when {
                     pressed -> theme.keyPressed
@@ -262,6 +311,14 @@ private fun KeyView(
                             color = theme.label,
                             fontSize = 22.sp,
                             modifier = Modifier
+                                .semantics {
+                                    role = Role.Button
+                                    onClick {
+                                        onAction(KeyAction.Text(alt))
+                                        popupOpen = false
+                                        true
+                                    }
+                                }
                                 .pointerInput(alt) {
                                     detectTapGestures(onTap = {
                                         onAction(KeyAction.Text(alt))
