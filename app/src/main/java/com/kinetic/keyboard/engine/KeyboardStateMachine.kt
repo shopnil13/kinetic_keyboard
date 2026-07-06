@@ -154,6 +154,18 @@ class KeyboardStateMachine(
         show(currentSet.baseLayout)
     }
 
+    /** The active language set's id — persisted per app (P5.8). */
+    val currentLanguageId: String get() = currentSet.id
+
+    /** P5.8: jump straight to a language set by id (no-op for unknown/current ids). */
+    fun selectLanguage(id: String) {
+        val i = sets.indexOfFirst { it.id == id }
+        if (i < 0 || i == setIndex) return
+        setIndex = i
+        shifted = false; capsLock = false
+        show(currentSet.baseLayout)
+    }
+
     companion object {
         private const val DOUBLE_TAP_MS = 350L
         val DEFAULT_SETS = listOf(

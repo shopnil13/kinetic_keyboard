@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
 import android.graphics.Paint
 import com.kinetic.keyboard.data.KeyboardPrefs
+import com.kinetic.keyboard.data.PerAppLanguage
 import com.kinetic.keyboard.data.PrefsRepository
 import com.kinetic.keyboard.emoji.EmojiCatalog
 import com.kinetic.keyboard.emoji.EmojiCategory
@@ -66,6 +67,10 @@ class KeyboardImeService : InputMethodService() {
     /** Set right after an autocorrect so one backspace can undo it (original, corrected). */
     private var pendingUndo: Pair<String, String>? = null
 
+    // P5.8: last language per app, restored when that app's field gets focus again.
+    private lateinit var perAppLanguage: PerAppLanguage
+    private var currentAppPackage: String? = null
+
     // P5.5: emoji panel state — library, recents, open/closed.
     private lateinit var emojiRecentsStore: EmojiRecents
     private val emojiCategories = MutableStateFlow<List<EmojiCategory>>(emptyList())
@@ -91,6 +96,9 @@ class KeyboardImeService : InputMethodService() {
             suggestionManager.english =
                 assets.open("dict/en.tsv").bufferedReader().use(Dictionary.Companion::load)
         }
+
+        perAppLanguage = PerAppLanguage(File(filesDir, "app_langs.tsv"))
+        scope.launch(Dispatchers.IO) { perAppLanguage.load() }
 
         emojiRecentsStore = EmojiRecents(File(filesDir, "emoji_recents.txt"))
         scope.launch(Dispatchers.IO) {
@@ -219,6 +227,8 @@ class KeyboardImeService : InputMethodService() {
             KeyAction.CycleLanguage -> {
                 commitComposing(ic)
                 stateMachine.cycleLanguage()
+                // P5.8: an explicit switch is this app's new preference.
+                currentAppPackage?.let { perAppLanguage.set(it, stateMachine.currentLanguageId) }
             }
             KeyAction.ShowImePicker -> {
                 commitComposing(ic)
@@ -402,6 +412,11 @@ class KeyboardImeService : InputMethodService() {
         lastCommittedWord = ""
         pendingUndo = null
         emojiOpen.value = false // a new field always starts on the letter keys
+        // P5.8: restore this app's last language.
+        currentAppPackage = info?.packageName
+        currentAppPackage?.let { pkg ->
+            perAppLanguage.get(pkg)?.let(stateMachine::selectLanguage)
+        }
         currentInputConnection?.let {
             updateSuggestions(it)
             updateAutoCaps(it)
@@ -414,6 +429,7 @@ class KeyboardImeService : InputMethodService() {
         scope.launch(Dispatchers.IO) {
             suggestionManager.userDict?.saveIfDirty()
             suggestionManager.bigrams?.saveIfDirty()
+            perAppLanguage.saveIfDirty()
         }
         lifecycleOwner.onPause()
         super.onFinishInputView(finishingInput)
