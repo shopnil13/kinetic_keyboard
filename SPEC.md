@@ -316,8 +316,8 @@ This is the single source of truth for build progress. Every unit of work is a t
 | P2 | Bengali correctness core | 1 wk | 🟡 code + tests green; on-device QA pending | Golden corpus passes; cluster backspace works |
 | P3 | Banglish phonetic (port) | 1–2 wk | 🟡 ported + corpus green; refactor (P3.6) & candidates (P3.7→P4) open | Kotlin output == reference behavior on corpus |
 | P4 | Suggestions / prediction / autocorrect | 2 wk | 🟢 done (Room user-dict migration & static n-grams remain as refinements) | Relevant suggestions in all 3 modes |
-| P5 | Parity polish (themes, emoji, settings, …) | ongoing | 🟡 settings + themes + feedback live; emoji/clipboard/gestures open | P1.2 feature set complete |
-| P6 | Hardening & release | 1–2 wk | 🔴 | Passes device matrix; shippable build |
+| P5 | Parity polish (themes, emoji, settings, …) | ongoing | 🟡 settings/themes/feedback/emoji/per-app-language live; clipboard/voice/gestures open | P1.2 feature set complete |
+| P6 | Hardening & release | 1–2 wk | 🟡 privacy + R8 + a11y semantics + CI done; device matrix, perf, store, signing open | Passes device matrix; shippable build |
 
 Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 
@@ -333,7 +333,7 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 - [x] **P0.5** `ImeLifecycleOwner` — sets `ViewTreeLifecycleOwner`/`ViewModelStoreOwner`/`SavedStateRegistryOwner` on the ComposeView. *Done.* `deps: P0.4`
 - [x] **P0.6** Minimal keyboard composable — placeholder keys commit via `InputConnection`. *Done (`MinimalKeyboard.kt`).* `deps: P0.5`
 - [x] **P0.7** Manual device/emulator test — enable in picker, switch, type. *Done: verified by user in Android Studio.* `deps: P0.1, P0.6`
-- [ ] **P0.8** CI pipeline — GitHub Actions: build + lint + unit tests on push. *DoD: green run on main.* `deps: P0.2`
+- [x] **P0.8** CI pipeline — GitHub Actions: build + lint + unit tests on push (gradlew wrapper committed). *DoD: green run on main.* `deps: P0.2`
 - [~] **P0.9** Repo hygiene — README ✓, `.gitignore` ✓, module layout ✓; LICENSE decision pending (§12 Q4). *DoD: docs present + license chosen.*
 
 **🚦 Gate P0: ✅ PASSED** — keyboard installs, appears in the system picker, types on device. Compose-in-IME confirmed working.
@@ -419,10 +419,10 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 - [~] **P5.2** Theme system — `KbTheme` palettes: Dark (reference-photo look) + Light + follow-system; instant switch, no restart. *Verified. Custom/wallpaper-adaptive themes still open.* `deps: P1.9`
 - [~] **P5.3** Sizing prefs — key height live from settings. *Number-row toggle, punctuation-strip toggle, one-handed offset still open.* `deps: P5.1`
 - [x] **P5.4** Feedback — haptics (KEYBOARD_TAP) + key sound (standard/delete/space/return effects), both toggleable, off-by-default sound. *Done.*
-- [ ] **P5.5** Emoji panel — categories, recents, skin tones, search, emoji suggestions. *DoD: inserts emoji; recents persist.* `deps: P1.9`
+- [~] **P5.5** Emoji panel — built-in 1.7k-emoji library, 8 categories, persisted recents, dedicated 😊 key (comma moved to punctuation popup). DoD met; skin tones, search, emoji suggestions still open. *DoD: inserts emoji; recents persist.* `deps: P1.9`
 - [ ] **P5.6** Clipboard manager — Room-backed history, pin, auto-expire. *DoD: copy→appears→paste; expiry works.*
 - [ ] **P5.7** Voice input — delegate to system speech recognizer via the mic key. *DoD: dictation inserts text.*
-- [ ] **P5.8** Per-app language/mode memory. *DoD: reopening an app restores its last mode.* `deps: P5.1`
+- [x] **P5.8** Per-app language/mode memory (app_langs.tsv, restored in onStartInputView). *DoD: reopening an app restores its last mode.* `deps: P5.1`
 - [ ] **P5.9** Gesture / glide typing (own sub-milestone — hard). *DoD: swiping a word commits it; accuracy baseline met.* `deps: P4.3`
 - [ ] **P5.10** GIF / sticker panel (Tenor provider + API key). *DoD: search & insert.* `deps: P5.5`
 - [ ] **P5.11** One-handed / floating / split modes. *DoD: each mode usable & persisted.* `deps: P5.3`
@@ -433,11 +433,11 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 
 ### P6 — Hardening & release
 - [ ] **P6.1** Device/OEM matrix — Bengali shaping across fonts/Android versions; bundle fallback font. *DoD: no rendering regressions on the matrix.*
-- [ ] **P6.2** Accessibility — TalkBack, content descriptions, min touch targets. *DoD: navigable via screen reader.*
+- [~] **P6.2** Accessibility — keys/popups expose Button role + click actions, glyphs get spoken labels. On-device TalkBack pass pending. *DoD: navigable via screen reader.*
 - [ ] **P6.3** Performance pass — cold start, memory, sustained key latency. *DoD: meets budget from P1.14.*
-- [ ] **P6.4** Privacy review — guarantee no network on the typing path; document data handling. *DoD: written statement + a test asserting no egress while typing.*
+- [x] **P6.4** Privacy review — PRIVACY.md + PrivacyGuaranteeTest (zero permissions, OS-enforced); private fields never learned/autocorrected/suggested. *DoD: written statement + a test asserting no egress while typing.*
 - [ ] **P6.5** Store assets — listing, screenshots, privacy policy, content rating. *DoD: Play Console draft complete.*
-- [ ] **P6.6** Release engineering — signing, versioning, R8/proguard rules for the IME, release build. *DoD: signed AAB builds & runs.*
+- [~] **P6.6** Release engineering — R8 minify+shrink verified (2.5 MB APK), serializer keep rules, v0.2.0. Remaining: owner keystore + signed AAB. *DoD: signed AAB builds & runs.*
 - [ ] **P6.7** Closed beta — internal/closed track, collect feedback, triage. *DoD: beta live, feedback loop running.* `deps: P6.6`
 
 **🚦 Gate P6:** passes the device matrix, privacy guarantee holds, signed build shippable to Play.
