@@ -13,14 +13,18 @@ android {
         applicationId = "com.kinetic.keyboard"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // P6.6: minified + resource-shrunk release; keep rules live in proguard-rules.pro.
+            // Signing config is intentionally absent — the release keystore stays with the
+            // owner; CI and local builds verify R8 on the unsigned artifact.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
