@@ -51,6 +51,11 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.savedstate)
     implementation(libs.androidx.datastore.preferences)
+    // P5.5 rev2: AndroidX emoji picker + EmojiCompat with the bundled font, so every emoji
+    // renders correctly on any device with zero network (keeps the PRIVACY.md guarantee).
+    implementation(libs.androidx.emoji2)
+    implementation(libs.androidx.emoji2.bundled)
+    implementation(libs.androidx.emoji2.emojipicker)
     implementation(libs.kotlinx.serialization.json)
 
     implementation(platform(libs.compose.bom))

@@ -20,6 +20,10 @@ class EmojiRecents(private val file: File, private val max: Int = 40) {
         return items.toList()
     }
 
+    /** The current in-memory list, most-recent first. */
+    @Synchronized
+    fun current(): List<String> = items.toList()
+
     /** Move [emoji] to the front and return the new list (for the UI state flow). */
     @Synchronized
     fun record(emoji: String): List<String> {

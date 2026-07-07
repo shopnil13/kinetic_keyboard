@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,105 +26,51 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kinetic.keyboard.emoji.EmojiCategory
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.emoji2.emojipicker.EmojiPickerView
+import androidx.emoji2.emojipicker.RecentEmojiProvider
 import com.kinetic.keyboard.ui.theme.KbTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val RECENTS_ID = "recents"
 private const val DELETE_INITIAL_MS = 350L
 private const val DELETE_INTERVAL_MS = 50L
 
 /**
- * P5.5: full-keyboard emoji panel — category tabs on top, scrollable grid, ABC/backspace
- * bottom bar. Replaces the strip + key rows at the same total height, so the IME window
- * doesn't jump when it opens.
+ * P5.5 rev2: emoji panel built on the AndroidX EmojiPickerView — categories, recents, and
+ * built-in skin-tone variant popups, rendered through EmojiCompat's bundled font so every
+ * emoji draws correctly regardless of the device's system font. Our own ABC/backspace bar
+ * sits below it. Replaces strip + key rows at the same total height.
  */
 @Composable
 fun EmojiPanel(
-    categories: List<EmojiCategory>,
-    recents: List<String>,
+    recentEmojiProvider: RecentEmojiProvider,
     theme: KbTheme,
     height: Dp,
     onEmoji: (String) -> Unit,
     onBack: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    var selected by remember {
-        mutableStateOf(if (recents.isNotEmpty()) RECENTS_ID else categories.firstOrNull()?.id ?: RECENTS_ID)
-    }
-    val current = if (selected == RECENTS_ID) recents
-    else categories.firstOrNull { it.id == selected }?.emoji.orEmpty()
-
-    Column(Modifier.fillMaxWidth().height(height)) {
-        // Category tabs: recents first, then the library categories.
-        Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-            CategoryTab("🕘", selected == RECENTS_ID, theme, Modifier.weight(1f), "Recent emoji") {
-                selected = RECENTS_ID
-            }
-            categories.forEach { cat ->
-                CategoryTab(cat.icon, selected == cat.id, theme, Modifier.weight(1f), cat.id) {
-                    selected = cat.id
+    Column(Modifier.fillMaxWidth().height(height).background(theme.background)) {
+        AndroidView(
+            factory = { context ->
+                EmojiPickerView(context).apply {
+                    emojiGridColumns = 9
+                    setRecentEmojiProvider(recentEmojiProvider)
+                    setOnEmojiPickedListener { onEmoji(it.emoji) }
                 }
-            }
-        }
-
-        if (current.isEmpty()) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text("No recent emoji yet", color = theme.hint, fontSize = 14.sp)
-            }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 44.dp),
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            ) {
-                items(current, key = { it }) { emoji ->
-                    Text(
-                        text = emoji,
-                        fontSize = 26.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .semantics { role = Role.Button }
-                            .clickable { onEmoji(emoji) }
-                            .padding(vertical = 7.dp),
-                    )
-                }
-            }
-        }
-
-        // Bottom bar: back to letters + backspace (with key repeat, like the main keyboard).
+            },
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        )
         Row(Modifier.fillMaxWidth().height(44.dp)) {
             PanelKey("ABC", theme, Modifier.weight(2f), "Back to letters") { onBack() }
             Box(Modifier.weight(6f))
             RepeatingDeleteKey(theme, Modifier.weight(2f), onDelete)
         }
-    }
-}
-
-@Composable
-private fun CategoryTab(
-    icon: String,
-    active: Boolean,
-    theme: KbTheme,
-    modifier: Modifier,
-    description: String,
-    onSelect: () -> Unit,
-) {
-    Box(
-        modifier
-            .fillMaxHeight()
-            .padding(horizontal = 2.dp, vertical = 4.dp)
-            .background(if (active) theme.keyPressed else theme.background, RoundedCornerShape(7.dp))
-            .semantics { contentDescription = description }
-            .clickable(onClick = onSelect),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(icon, fontSize = 18.sp)
     }
 }
 

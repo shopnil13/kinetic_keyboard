@@ -14,13 +14,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
-import android.graphics.Paint
+import androidx.emoji2.bundled.BundledEmojiCompatConfig
+import androidx.emoji2.text.EmojiCompat
 import com.kinetic.keyboard.data.KeyboardPrefs
 import com.kinetic.keyboard.data.PerAppLanguage
 import com.kinetic.keyboard.data.PrefsRepository
-import com.kinetic.keyboard.emoji.EmojiCatalog
-import com.kinetic.keyboard.emoji.EmojiCategory
 import com.kinetic.keyboard.emoji.EmojiRecents
+import com.kinetic.keyboard.emoji.FileRecentEmojiProvider
 import com.kinetic.keyboard.engine.InputMode
 import com.kinetic.keyboard.engine.KeyboardStateMachine
 import com.kinetic.keyboard.engine.LayoutRepository
@@ -71,10 +71,9 @@ class KeyboardImeService : InputMethodService() {
     private lateinit var perAppLanguage: PerAppLanguage
     private var currentAppPackage: String? = null
 
-    // P5.5: emoji panel state — library, recents, open/closed.
+    // P5.5: emoji panel state — file-backed recents + open/closed.
     private lateinit var emojiRecentsStore: EmojiRecents
-    private val emojiCategories = MutableStateFlow<List<EmojiCategory>>(emptyList())
-    private val emojiRecents = MutableStateFlow<List<String>>(emptyList())
+    private lateinit var recentEmojiProvider: FileRecentEmojiProvider
     private val emojiOpen = MutableStateFlow(false)
 
     override fun onCreate() {
@@ -100,13 +99,14 @@ class KeyboardImeService : InputMethodService() {
         perAppLanguage = PerAppLanguage(File(filesDir, "app_langs.tsv"))
         scope.launch(Dispatchers.IO) { perAppLanguage.load() }
 
-        emojiRecentsStore = EmojiRecents(File(filesDir, "emoji_recents.txt"))
-        scope.launch(Dispatchers.IO) {
-            emojiRecents.value = emojiRecentsStore.load()
-            val catalog = assets.open("emoji/emoji.tsv").bufferedReader().use(EmojiCatalog::parse)
-            val paint = Paint()
-            emojiCategories.value = EmojiCatalog.filterRenderable(catalog, paint::hasGlyph)
+        // P5.5 rev2: EmojiCompat with the bundled Noto font — full modern emoji coverage on
+        // every device, fully offline (no downloadable-font provider; see PRIVACY.md).
+        if (!EmojiCompat.isConfigured()) {
+            EmojiCompat.init(BundledEmojiCompatConfig(this))
         }
+        emojiRecentsStore = EmojiRecents(File(filesDir, "emoji_recents.txt"))
+        recentEmojiProvider = FileRecentEmojiProvider(emojiRecentsStore, scope)
+        scope.launch(Dispatchers.IO) { emojiRecentsStore.load() }
     }
 
     override fun onCreateInputView(): View {
@@ -117,8 +117,6 @@ class KeyboardImeService : InputMethodService() {
                 val words by suggestions.collectAsState()
                 val prefs by prefsRepo.prefs.collectAsState(initial = currentPrefs)
                 val showEmoji by emojiOpen.collectAsState()
-                val categories by emojiCategories.collectAsState()
-                val recents by emojiRecents.collectAsState()
                 val theme = when (prefs.themeMode) {
                     ThemeMode.LIGHT -> KbTheme.Light
                     ThemeMode.DARK -> KbTheme.Dark
@@ -131,8 +129,7 @@ class KeyboardImeService : InputMethodService() {
                     keyHeight = prefs.keyHeightDp.dp,
                     longPressMs = prefs.longPressMs,
                     emojiOpen = showEmoji,
-                    emojiCategories = categories,
-                    emojiRecents = recents,
+                    recentEmojiProvider = recentEmojiProvider,
                     onAction = ::handleAction,
                     onSuggestion = ::commitSuggestion,
                 )
@@ -239,10 +236,9 @@ class KeyboardImeService : InputMethodService() {
                 emojiOpen.value = !emojiOpen.value
             }
             is KeyAction.EmojiInput -> {
+                // The picker records recents itself via FileRecentEmojiProvider.
                 commitComposing(ic)
                 ic.commitText(action.emoji, 1)
-                emojiRecents.value = emojiRecentsStore.record(action.emoji)
-                scope.launch(Dispatchers.IO) { emojiRecentsStore.save() }
             }
         }
         updateSuggestions(ic)

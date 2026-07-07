@@ -1,6 +1,8 @@
 package com.kinetic.keyboard.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -26,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -41,7 +45,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
-import com.kinetic.keyboard.emoji.EmojiCategory
+import androidx.emoji2.emojipicker.RecentEmojiProvider
 import com.kinetic.keyboard.engine.KeyboardUiState
 import com.kinetic.keyboard.engine.model.KeyDef
 import com.kinetic.keyboard.engine.model.KeyTypes
@@ -74,6 +78,9 @@ sealed interface KeyAction {
 private const val REPEAT_INITIAL_MS = 350L
 private const val REPEAT_INTERVAL_MS = 50L
 
+/** Popup cell width — the slide-to-select math and the rendered cells must agree on this. */
+private val POPUP_CELL = 44.dp
+
 @Composable
 fun KeyboardScreen(
     ui: KeyboardUiState,
@@ -82,8 +89,7 @@ fun KeyboardScreen(
     keyHeight: Dp,
     longPressMs: Int,
     emojiOpen: Boolean,
-    emojiCategories: List<EmojiCategory>,
-    emojiRecents: List<String>,
+    recentEmojiProvider: RecentEmojiProvider,
     onAction: (KeyAction) -> Unit,
     onSuggestion: (String) -> Unit,
 ) {
@@ -108,8 +114,7 @@ fun KeyboardScreen(
                 if (emojiOpen) {
                     // Same total height as strip + key rows so the IME window doesn't jump.
                     EmojiPanel(
-                        categories = emojiCategories,
-                        recents = emojiRecents,
+                        recentEmojiProvider = recentEmojiProvider,
                         theme = theme,
                         height = keyHeight * ui.layout.rows.size + 46.dp,
                         onEmoji = { onAction(KeyAction.EmojiInput(it)) },
@@ -155,6 +160,7 @@ private fun KeyView(
 ) {
     var pressed by remember { mutableStateOf(false) }
     var popupOpen by remember { mutableStateOf(false) }
+    var selectedAlt by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     val isModifierKey = key.type != KeyTypes.CHAR
     val popupYOffset = with(LocalDensity.current) { -(keyHeight + 8.dp).roundToPx() }
@@ -215,15 +221,59 @@ private fun KeyView(
     }
 
     val gestures = when (key.type) {
+        // P1.11 (slide-to-select): tap commits the key; holding opens the popup with the FIRST
+        // alternative preselected, sliding sideways moves the selection, release commits it —
+        // the finger never has to lift, matching Gboard/the original Ridmik feel.
         KeyTypes.CHAR -> Modifier.pointerInput(key, ui.uppercase) {
-            detectTapGestures(
-                onPress = { pressed = true; tryAwaitRelease(); pressed = false },
-                onTap = { onAction(KeyAction.Text(key.outputText(ui.uppercase))) },
-                onLongPress = {
-                    if (key.popup.isNotEmpty()) popupOpen = true
-                    else onAction(KeyAction.Text(key.outputText(ui.uppercase)))
-                },
-            )
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                down.consume()
+                pressed = true
+                // Wait for release or the long-press timeout, whichever comes first.
+                // true = released (tap) · false = pointer lost · null = still held (long press).
+                val released = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                            ?: return@withTimeoutOrNull false
+                        change.consume()
+                        if (change.changedToUp()) return@withTimeoutOrNull true
+                    }
+                    @Suppress("UNREACHABLE_CODE") false
+                }
+                when {
+                    released == true -> onAction(KeyAction.Text(key.outputText(ui.uppercase)))
+                    released == null && key.popup.isEmpty() -> {
+                        // Long hold with no alternatives: commit the key itself (as before).
+                        onAction(KeyAction.Text(key.outputText(ui.uppercase)))
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            change.consume()
+                            if (change.changedToUp()) break
+                        }
+                    }
+                    released == null -> {
+                        selectedAlt = 0
+                        popupOpen = true
+                        val cell = POPUP_CELL.toPx()
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            change.consume()
+                            if (change.changedToUp()) {
+                                onAction(KeyAction.Text(key.popup[selectedAlt]))
+                                break
+                            }
+                            // Cells start at the key's left edge (the popup is anchored there).
+                            selectedAlt = (change.position.x / cell).toInt()
+                                .coerceIn(0, key.popup.lastIndex)
+                        }
+                    }
+                }
+                pressed = false
+                popupOpen = false
+            }
         }
         KeyTypes.BACKSPACE -> Modifier.pointerInput(Unit) {
             detectTapGestures(onPress = {
@@ -329,6 +379,7 @@ private fun KeyView(
         }
 
         if (popupOpen) {
+            // Display-only: the still-held finger drives selection (slide) and commit (release).
             Popup(
                 offset = IntOffset(0, popupYOffset),
                 onDismissRequest = { popupOpen = false },
@@ -336,30 +387,25 @@ private fun KeyView(
                 Row(
                     Modifier
                         .background(theme.popupBg, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                        .padding(vertical = 6.dp),
                 ) {
-                    key.popup.forEach { alt ->
-                        Text(
-                            text = alt,
-                            color = theme.label,
-                            fontSize = 22.sp,
-                            modifier = Modifier
-                                .semantics {
-                                    role = Role.Button
-                                    onClick {
-                                        onAction(KeyAction.Text(alt))
-                                        popupOpen = false
-                                        true
-                                    }
-                                }
-                                .pointerInput(alt) {
-                                    detectTapGestures(onTap = {
-                                        onAction(KeyAction.Text(alt))
-                                        popupOpen = false
-                                    })
-                                }
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
-                        )
+                    key.popup.forEachIndexed { index, alt ->
+                        Box(
+                            Modifier
+                                .width(POPUP_CELL)
+                                .background(
+                                    if (index == selectedAlt) theme.keyPressed else theme.popupBg,
+                                    RoundedCornerShape(6.dp),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = alt,
+                                color = if (index == selectedAlt) theme.accent else theme.label,
+                                fontSize = 22.sp,
+                                modifier = Modifier.padding(vertical = 4.dp),
+                            )
+                        }
                     }
                 }
             }

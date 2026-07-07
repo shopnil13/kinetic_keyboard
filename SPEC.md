@@ -353,7 +353,7 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 - [x] **P1.8** `KeyboardStateMachine` — layer/shift/language via `StateFlow`; one-shot shift, double-tap caps-lock. *Done (dedicated unit tests still worth adding).* `deps: P1.7`
 - [x] **P1.9** Compose render — `KeyboardScreen` with weight-based widths, row gaps (5% offsets), hint superscripts. *Done.* `deps: P1.8`
 - [x] **P1.10** Touch — tap dispatch, pressed highlight. *Done (in `KeyView` gestures).* `deps: P1.9`
-- [~] **P1.11** Popups — long-press opens multi-char popup, tap-to-commit. *Done; slide-to-select refinement pending.* `deps: P1.10`
+- [x] **P1.11** Popups — long-press opens the popup with the first alternative preselected; slide sideways to change, release to commit (Gboard-style). `deps: P1.10`
 - [x] **P1.12** Special keys — shift (one-shot/lock), backspace repeat-on-hold, space (label + swipe = language cycle), action-aware enter, `?123`/`ABC`/`ALT`, danda, tab. *Done.* `deps: P1.10`
 - [x] **P1.13** Wired to `InputConnection` in `KeyboardImeService.handleAction`. *Done.* `deps: P1.11, P1.12`
 - [ ] **P1.14** Latency benchmark + UI-stack decision — measure; fall back to custom View if needed. *DoD: recorded numbers + decision.* `deps: P1.13`
@@ -419,7 +419,7 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 - [~] **P5.2** Theme system — `KbTheme` palettes: Dark (reference-photo look) + Light + follow-system; instant switch, no restart. *Verified. Custom/wallpaper-adaptive themes still open.* `deps: P1.9`
 - [~] **P5.3** Sizing prefs — key height live from settings. *Number-row toggle, punctuation-strip toggle, one-handed offset still open.* `deps: P5.1`
 - [x] **P5.4** Feedback — haptics (KEYBOARD_TAP) + key sound (standard/delete/space/return effects), both toggleable, off-by-default sound. *Done.*
-- [~] **P5.5** Emoji panel — built-in 1.7k-emoji library, 8 categories, persisted recents, dedicated 😊 key (comma moved to punctuation popup). DoD met; skin tones, search, emoji suggestions still open. *DoD: inserts emoji; recents persist.* `deps: P1.9`
+- [~] **P5.5** Emoji panel — AndroidX EmojiPickerView + EmojiCompat bundled font (offline, renders everywhere): categories, skin-tone variants, file-backed recents, dedicated 😊 key. DoD met; search + emoji suggestions still open. *DoD: inserts emoji; recents persist.* `deps: P1.9`
 - [ ] **P5.6** Clipboard manager — Room-backed history, pin, auto-expire. *DoD: copy→appears→paste; expiry works.*
 - [ ] **P5.7** Voice input — delegate to system speech recognizer via the mic key. *DoD: dictation inserts text.*
 - [x] **P5.8** Per-app language/mode memory (app_langs.tsv, restored in onStartInputView). *DoD: reopening an app restores its last mode.* `deps: P5.1`
