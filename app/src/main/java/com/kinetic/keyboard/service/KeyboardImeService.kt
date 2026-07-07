@@ -1,5 +1,6 @@
 package com.kinetic.keyboard.service
 
+import android.content.ClipDescription
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
 import android.view.HapticFeedbackConstants
@@ -14,13 +15,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import androidx.core.view.inputmethod.EditorInfoCompat
+import androidx.core.view.inputmethod.InputConnectionCompat
+import androidx.core.view.inputmethod.InputContentInfoCompat
 import androidx.emoji2.bundled.BundledEmojiCompatConfig
 import androidx.emoji2.text.EmojiCompat
+import com.kinetic.keyboard.BuildConfig
 import com.kinetic.keyboard.data.KeyboardPrefs
 import com.kinetic.keyboard.data.PerAppLanguage
 import com.kinetic.keyboard.data.PrefsRepository
 import com.kinetic.keyboard.emoji.EmojiRecents
 import com.kinetic.keyboard.emoji.FileRecentEmojiProvider
+import com.kinetic.keyboard.giphy.GiphyClient
+import com.kinetic.keyboard.giphy.GiphyItem
+import com.kinetic.keyboard.giphy.MediaKind
 import com.kinetic.keyboard.engine.InputMode
 import com.kinetic.keyboard.engine.KeyboardStateMachine
 import com.kinetic.keyboard.engine.LayoutRepository
@@ -32,15 +41,21 @@ import com.kinetic.keyboard.suggest.UserDictionary
 import com.kinetic.keyboard.text.BanglaTextValidator
 import com.kinetic.keyboard.ui.KeyAction
 import com.kinetic.keyboard.ui.KeyboardScreen
+import com.kinetic.keyboard.ui.MediaStatus
+import com.kinetic.keyboard.ui.MediaUiState
+import com.kinetic.keyboard.ui.PanelMode
 import com.kinetic.keyboard.ui.theme.KbTheme
 import com.kinetic.keyboard.ui.theme.ThemeMode
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Kinetic Keyboard IME entry point (SPEC.md §4).
@@ -71,10 +86,13 @@ class KeyboardImeService : InputMethodService() {
     private lateinit var perAppLanguage: PerAppLanguage
     private var currentAppPackage: String? = null
 
-    // P5.5: emoji panel state — file-backed recents + open/closed.
+    // P5.5: emoji panel state — file-backed recents; P5.10: GIF/sticker panel.
     private lateinit var emojiRecentsStore: EmojiRecents
     private lateinit var recentEmojiProvider: FileRecentEmojiProvider
-    private val emojiOpen = MutableStateFlow(false)
+    private lateinit var giphy: GiphyClient
+    private val panelMode = MutableStateFlow(PanelMode.NONE)
+    private val mediaUi = MutableStateFlow(MediaUiState())
+    private var mediaJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -107,6 +125,8 @@ class KeyboardImeService : InputMethodService() {
         emojiRecentsStore = EmojiRecents(File(filesDir, "emoji_recents.txt"))
         recentEmojiProvider = FileRecentEmojiProvider(emojiRecentsStore, scope)
         scope.launch(Dispatchers.IO) { emojiRecentsStore.load() }
+
+        giphy = GiphyClient(BuildConfig.GIPHY_API_KEY)
     }
 
     override fun onCreateInputView(): View {
@@ -116,7 +136,8 @@ class KeyboardImeService : InputMethodService() {
                 val ui by stateMachine.state.collectAsState()
                 val words by suggestions.collectAsState()
                 val prefs by prefsRepo.prefs.collectAsState(initial = currentPrefs)
-                val showEmoji by emojiOpen.collectAsState()
+                val panel by panelMode.collectAsState()
+                val media by mediaUi.collectAsState()
                 val theme = when (prefs.themeMode) {
                     ThemeMode.LIGHT -> KbTheme.Light
                     ThemeMode.DARK -> KbTheme.Dark
@@ -128,10 +149,16 @@ class KeyboardImeService : InputMethodService() {
                     theme = theme,
                     keyHeight = prefs.keyHeightDp.dp,
                     longPressMs = prefs.longPressMs,
-                    emojiOpen = showEmoji,
+                    panelMode = panel,
+                    media = media,
                     recentEmojiProvider = recentEmojiProvider,
                     onAction = ::handleAction,
                     onSuggestion = ::commitSuggestion,
+                    onMediaTab = ::switchPanel,
+                    onMediaSearchOpen = {
+                        mediaUi.update { it.copy(searchActive = true, query = "") }
+                    },
+                    onMediaPick = ::insertMedia,
                 )
             }
         }
@@ -164,6 +191,24 @@ class KeyboardImeService : InputMethodService() {
     private fun handleAction(action: KeyAction) {
         val ic = currentInputConnection ?: return
         feedback(action)
+        // P5.10: while the GIPHY search bar is up, the keys type into the query, not the app.
+        if (mediaUi.value.searchActive) {
+            when (action) {
+                is KeyAction.Text -> mediaUi.update { it.copy(query = it.query + action.text) }
+                KeyAction.Space -> mediaUi.update { it.copy(query = it.query + " ") }
+                KeyAction.Delete -> mediaUi.update { it.copy(query = it.query.dropLast(1)) }
+                KeyAction.Enter -> {
+                    mediaUi.update { it.copy(searchActive = false) }
+                    loadMedia(mediaUi.value.query)
+                }
+                KeyAction.Shift -> stateMachine.onShift()
+                is KeyAction.LayerSwitch -> stateMachine.switchLayer(action.target)
+                KeyAction.CycleLanguage -> stateMachine.cycleLanguage()
+                KeyAction.ToggleEmoji -> switchPanel(PanelMode.EMOJI)
+                else -> {}
+            }
+            return
+        }
         // An autocorrect is only undoable by the immediately following backspace.
         if (action != KeyAction.Delete) pendingUndo = null
         when (action) {
@@ -233,7 +278,7 @@ class KeyboardImeService : InputMethodService() {
             }
             KeyAction.ToggleEmoji -> {
                 commitComposing(ic)
-                emojiOpen.value = !emojiOpen.value
+                switchPanel(if (panelMode.value == PanelMode.EMOJI) PanelMode.NONE else PanelMode.EMOJI)
             }
             is KeyAction.EmojiInput -> {
                 // The picker records recents itself via FileRecentEmojiProvider.
@@ -259,6 +304,68 @@ class KeyboardImeService : InputMethodService() {
     }
 
     private fun isRomanLetter(s: String) = s.length == 1 && (s[0] in 'a'..'z' || s[0] in 'A'..'Z')
+
+    /** P5.5/P5.10: switch between the letter keys and the emoji / GIF / sticker panels. */
+    private fun switchPanel(target: PanelMode) {
+        currentInputConnection?.let(::commitComposing)
+        mediaUi.update { it.copy(searchActive = false) }
+        panelMode.value = target
+        if (target == PanelMode.GIF || target == PanelMode.STICKER) {
+            loadMedia(mediaUi.value.query) // blank query → trending
+        }
+    }
+
+    /** P5.10: query GIPHY (trending when [query] is blank) for the active panel's kind. */
+    private fun loadMedia(query: String) {
+        if (!giphy.hasKey) {
+            mediaUi.update { it.copy(status = MediaStatus.NO_KEY, items = emptyList()) }
+            return
+        }
+        mediaJob?.cancel()
+        mediaJob = scope.launch {
+            mediaUi.update { it.copy(status = MediaStatus.LOADING) }
+            val kind =
+                if (panelMode.value == PanelMode.STICKER) MediaKind.STICKER else MediaKind.GIF
+            val items = withContext(Dispatchers.IO) {
+                runCatching { giphy.fetch(kind, query) }.getOrNull()
+            }
+            mediaUi.update {
+                if (items == null) it.copy(status = MediaStatus.ERROR)
+                else it.copy(status = MediaStatus.IDLE, items = items)
+            }
+        }
+    }
+
+    /**
+     * P5.10: insert a picked GIF/sticker. Image-capable fields get the real GIF via
+     * commitContent (FileProvider-backed); everything else gets the GIPHY URL as text.
+     */
+    private fun insertMedia(item: GiphyItem) {
+        scope.launch {
+            val info = currentInputEditorInfo ?: return@launch
+            val acceptsGif = EditorInfoCompat.getContentMimeTypes(info).any {
+                ClipDescription.compareMimeTypes(it, "image/gif")
+            }
+            val file = if (acceptsGif) {
+                withContext(Dispatchers.IO) { giphy.download(item, File(cacheDir, "giphy")) }
+            } else {
+                null
+            }
+            val ic = currentInputConnection ?: return@launch
+            if (file != null) {
+                val uri = FileProvider.getUriForFile(
+                    this@KeyboardImeService, "com.kinetic.keyboard.fileprovider", file,
+                )
+                InputConnectionCompat.commitContent(
+                    ic, info,
+                    InputContentInfoCompat(uri, ClipDescription("GIF", arrayOf("image/gif")), null),
+                    InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null,
+                )
+            } else {
+                ic.commitText(item.gifUrl, 1)
+            }
+        }
+    }
 
     /**
      * P6.4 (privacy): password / no-suggestion fields must never feed the user dictionary or
@@ -407,7 +514,8 @@ class KeyboardImeService : InputMethodService() {
         lifecycleOwner.onResume()
         lastCommittedWord = ""
         pendingUndo = null
-        emojiOpen.value = false // a new field always starts on the letter keys
+        panelMode.value = PanelMode.NONE // a new field always starts on the letter keys
+        mediaUi.update { it.copy(searchActive = false) }
         // P5.8: restore this app's last language.
         currentAppPackage = info?.packageName
         currentAppPackage?.let { pkg ->

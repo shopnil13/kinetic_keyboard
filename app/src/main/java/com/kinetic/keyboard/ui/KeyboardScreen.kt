@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.emoji2.emojipicker.RecentEmojiProvider
+import com.kinetic.keyboard.giphy.GiphyItem
 import com.kinetic.keyboard.engine.KeyboardUiState
 import com.kinetic.keyboard.engine.model.KeyDef
 import com.kinetic.keyboard.engine.model.KeyTypes
@@ -88,10 +89,14 @@ fun KeyboardScreen(
     theme: KbTheme,
     keyHeight: Dp,
     longPressMs: Int,
-    emojiOpen: Boolean,
+    panelMode: PanelMode,
+    media: MediaUiState,
     recentEmojiProvider: RecentEmojiProvider,
     onAction: (KeyAction) -> Unit,
     onSuggestion: (String) -> Unit,
+    onMediaTab: (PanelMode) -> Unit,
+    onMediaSearchOpen: () -> Unit,
+    onMediaPick: (GiphyItem) -> Unit,
 ) {
     // detectTapGestures takes its long-press timeout from LocalViewConfiguration —
     // wrapping it lets the user's "hold delay" setting apply to every key at once.
@@ -111,36 +116,60 @@ fun KeyboardScreen(
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(horizontal = 1.dp, vertical = 3.dp),
             ) {
-                if (emojiOpen) {
-                    // Same total height as strip + key rows so the IME window doesn't jump.
-                    EmojiPanel(
+                // Panels replace strip + key rows at the same total height (no window jump).
+                val panelHeight = keyHeight * ui.layout.rows.size + 46.dp
+                val mediaMode = panelMode == PanelMode.GIF || panelMode == PanelMode.STICKER
+                when {
+                    panelMode == PanelMode.EMOJI -> EmojiPanel(
                         recentEmojiProvider = recentEmojiProvider,
                         theme = theme,
-                        height = keyHeight * ui.layout.rows.size + 46.dp,
+                        height = panelHeight,
                         onEmoji = { onAction(KeyAction.EmojiInput(it)) },
-                        onBack = { onAction(KeyAction.ToggleEmoji) },
+                        onTab = onMediaTab,
+                        onBack = { onMediaTab(PanelMode.NONE) },
                         onDelete = { onAction(KeyAction.Delete) },
                     )
-                } else {
-                    SuggestionStrip(
-                        suggestions = suggestions,
+                    mediaMode && !media.searchActive -> MediaPanel(
+                        mode = panelMode,
+                        state = media,
                         theme = theme,
-                        onSuggestion = onSuggestion,
-                        onPunctuation = { onAction(KeyAction.Text(it)) },
+                        height = panelHeight,
+                        onSearchTap = onMediaSearchOpen,
+                        onTab = onMediaTab,
+                        onBack = { onMediaTab(PanelMode.NONE) },
+                        onDelete = { onAction(KeyAction.Delete) },
+                        onPick = onMediaPick,
                     )
-                    ui.layout.rows.forEach { row ->
-                        Row(Modifier.fillMaxWidth().height(keyHeight)) {
-                            var used = 0f
-                            row.keys.forEach { key ->
-                                if (key.gap > 0f) {
-                                    Spacer(Modifier.weight(key.gap))
-                                    used += key.gap
+                    else -> {
+                        if (mediaMode) {
+                            // P5.10: typing a GIPHY query on the normal keys; ⏎ submits.
+                            MediaSearchBar(
+                                query = media.query,
+                                theme = theme,
+                                onSubmit = { onAction(KeyAction.Enter) },
+                            )
+                        } else {
+                            SuggestionStrip(
+                                suggestions = suggestions,
+                                theme = theme,
+                                onSuggestion = onSuggestion,
+                                onPunctuation = { onAction(KeyAction.Text(it)) },
+                            )
+                        }
+                        ui.layout.rows.forEach { row ->
+                            Row(Modifier.fillMaxWidth().height(keyHeight)) {
+                                var used = 0f
+                                row.keys.forEach { key ->
+                                    if (key.gap > 0f) {
+                                        Spacer(Modifier.weight(key.gap))
+                                        used += key.gap
+                                    }
+                                    val w = key.widthOrDefault()
+                                    KeyView(key, ui, theme, keyHeight, onAction, Modifier.weight(w))
+                                    used += w
                                 }
-                                val w = key.widthOrDefault()
-                                KeyView(key, ui, theme, keyHeight, onAction, Modifier.weight(w))
-                                used += w
+                                if (used < 99.5f) Spacer(Modifier.weight(100f - used))
                             }
-                            if (used < 99.5f) Spacer(Modifier.weight(100f - used))
                         }
                     }
                 }

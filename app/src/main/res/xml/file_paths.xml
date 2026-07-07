@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- P5.10: GIFs downloaded from GIPHY land in cache/giphy/ and are shared via commitContent. -->
+<paths>
+    <cache-path name="giphy" path="giphy/" />
+</paths>

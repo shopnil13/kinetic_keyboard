@@ -424,7 +424,7 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 - [ ] **P5.7** Voice input — delegate to system speech recognizer via the mic key. *DoD: dictation inserts text.*
 - [x] **P5.8** Per-app language/mode memory (app_langs.tsv, restored in onStartInputView). *DoD: reopening an app restores its last mode.* `deps: P5.1`
 - [ ] **P5.9** Gesture / glide typing (own sub-milestone — hard). *DoD: swiping a word commits it; accuracy baseline met.* `deps: P4.3`
-- [ ] **P5.10** GIF / sticker panel (Tenor provider + API key). *DoD: search & insert.* `deps: P5.5`
+- [~] **P5.10** GIF / sticker panel — GIPHY provider (user decision, was Tenor): Gboard-style tabs (ABC/😊/GIF/sticker/⌫), trending + inline search typed on the main keys, commitContent insert with URL fallback. Built + UI verified on emulator; needs `giphy.apiKey` in local.properties for live results. *DoD: search & insert.* `deps: P5.5`
 - [ ] **P5.11** One-handed / floating / split modes. *DoD: each mode usable & persisted.* `deps: P5.3`
 
 **🚦 Gate P5:** all §1.2 P1-priority features complete and stable.

@@ -12,3 +12,12 @@
 -keepclasseswithmembers class com.kinetic.keyboard.engine.model.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+
+# P5.10: GIPHY response models are deserialized the same way.
+-keep,includedescriptorclasses class com.kinetic.keyboard.giphy.**$$serializer { *; }
+-keepclassmembers class com.kinetic.keyboard.giphy.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.kinetic.keyboard.giphy.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
