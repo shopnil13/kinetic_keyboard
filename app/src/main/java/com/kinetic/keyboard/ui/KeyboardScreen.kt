@@ -231,13 +231,15 @@ private fun KeyView(
                 pressed = true
                 // Wait for release or the long-press timeout, whichever comes first.
                 // true = released (tap) · false = pointer lost · null = still held (long press).
+                // NB: changedToUp() is false on a consumed change — always check BEFORE consume().
                 val released = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id }
                             ?: return@withTimeoutOrNull false
+                        val up = change.changedToUp()
                         change.consume()
-                        if (change.changedToUp()) return@withTimeoutOrNull true
+                        if (up) return@withTimeoutOrNull true
                     }
                     @Suppress("UNREACHABLE_CODE") false
                 }
@@ -249,8 +251,9 @@ private fun KeyView(
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            val up = change.changedToUp()
                             change.consume()
-                            if (change.changedToUp()) break
+                            if (up) break
                         }
                     }
                     released == null -> {
@@ -260,8 +263,9 @@ private fun KeyView(
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            val up = change.changedToUp()
                             change.consume()
-                            if (change.changedToUp()) {
+                            if (up) {
                                 onAction(KeyAction.Text(key.popup[selectedAlt]))
                                 break
                             }
