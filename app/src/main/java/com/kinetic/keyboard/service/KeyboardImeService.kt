@@ -231,13 +231,13 @@ class KeyboardImeService : InputMethodService() {
                 val word = wordBeforeCursor(ic)
                 commitComposing(ic)
                 var committed = word
-                // P4.7: conservative autocorrect on word commit (not in phonetic mode — its
-                // output is deterministic transliteration, not typos; never in private fields).
-                if (word.isNotEmpty() && !isPrivateField() &&
-                    stateMachine.state.value.inputMode != InputMode.PHONETIC
+                // P4.7: conservative autocorrect on word commit, English (LATIN) only — never in
+                // phonetic mode (its output is deterministic transliteration, not typos), never
+                // for Bangla/UniJoy, never in private fields, and only when the user has it on.
+                if (word.isNotEmpty() && !isPrivateField() && currentPrefs.autocorrectEnabled &&
+                    stateMachine.state.value.inputMode == InputMode.LATIN
                 ) {
-                    val useBangla = stateMachine.state.value.inputMode != InputMode.LATIN
-                    val corrected = suggestionManager.corrector(useBangla).correct(word)
+                    val corrected = suggestionManager.corrector(useBangla = false).correct(word)
                     if (corrected != null) {
                         ic.deleteSurroundingText(word.length, 0)
                         ic.commitText(corrected, 1)

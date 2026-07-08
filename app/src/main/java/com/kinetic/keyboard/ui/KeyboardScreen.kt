@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,11 +36,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -46,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.emoji2.emojipicker.RecentEmojiProvider
+import com.kinetic.keyboard.R
 import com.kinetic.keyboard.giphy.GiphyItem
 import com.kinetic.keyboard.engine.KeyboardUiState
 import com.kinetic.keyboard.engine.model.KeyDef
@@ -55,6 +61,34 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+
+/** Key-cap glyphs render in Tiro Bangla so Bengali conjuncts/matras shape correctly. */
+private val KeyLabelFontFamily = FontFamily(Font(R.font.tiro_bangla))
+
+/** Bengali block (U+0980–U+09FF): Latin letters/digits/symbols keep the system default font. */
+private fun String.hasBengali(): Boolean = any { it.code in 0x0980..0x09FF }
+
+private fun keyLabelFontFor(text: String): FontFamily? =
+    if (text.hasBengali()) KeyLabelFontFamily else null
+
+/** Bengali dependent vowel signs and other combining marks — shown alone (matra keys) they have
+ *  no base glyph to attach to, so the shaper draws a dotted-circle placeholder. */
+private val BengaliCombiningMarks = setOf(
+    'া', 'ি', 'ী', 'ু', 'ূ', 'ৃ', 'ৄ',
+    'ে', 'ৈ', 'ো', 'ৌ', 'ৗ',
+    'ঁ', 'ং', 'ঃ', '্',
+)
+
+/** Display-only fix: prefix a non-breaking space so the mark has a base to attach to instead of
+ *  triggering the dotted-circle fallback. Checks the first non-ZWJ character, since phala keys
+ *  (ra-phala ‍্র, ya-phala ‍্য) lead with a ZWJ that — being zero-width — is NOT a valid
+ *  base and still leaves the following হসন্ত circled. Never touches what gets committed —
+ *  callers keep using [KeyDef.outputText]/[KeyDef.popup] for that, which read the model's raw,
+ *  un-prefixed label/output. */
+private fun bengaliDisplayLabel(text: String): String {
+    val base = text.firstOrNull { it != '‍' } ?: return text
+    return if (base in BengaliCombiningMarks) " $text" else text
+}
 
 /** Actions emitted by the keyboard UI, handled by the IME service (P1.13). */
 sealed interface KeyAction {
@@ -159,13 +193,23 @@ fun KeyboardScreen(
                         ui.layout.rows.forEach { row ->
                             Row(Modifier.fillMaxWidth().height(keyHeight)) {
                                 var used = 0f
-                                row.keys.forEach { key ->
+                                row.keys.forEachIndexed { index, key ->
                                     if (key.gap > 0f) {
                                         Spacer(Modifier.weight(key.gap))
                                         used += key.gap
                                     }
                                     val w = key.widthOrDefault()
-                                    KeyView(key, ui, theme, keyHeight, onAction, Modifier.weight(w))
+                                    KeyView(
+                                        key = key,
+                                        ui = ui,
+                                        theme = theme,
+                                        keyHeight = keyHeight,
+                                        onAction = onAction,
+                                        // Last key in the row butts against the screen edge — its
+                                        // popup has no room to expand rightward (P1.11 fix-1).
+                                        popupExpandsLeft = index == row.keys.lastIndex,
+                                        modifier = Modifier.weight(w),
+                                    )
                                     used += w
                                 }
                                 if (used < 99.5f) Spacer(Modifier.weight(100f - used))
@@ -185,6 +229,7 @@ private fun KeyView(
     theme: KbTheme,
     keyHeight: Dp,
     onAction: (KeyAction) -> Unit,
+    popupExpandsLeft: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var pressed by remember { mutableStateOf(false) }
@@ -194,16 +239,16 @@ private fun KeyView(
     val isModifierKey = key.type != KeyTypes.CHAR
     val popupYOffset = with(LocalDensity.current) { -(keyHeight + 8.dp).roundToPx() }
     // Glyphs scale with key height so taller keys genuinely look bigger
-    // (24sp at the 72dp default), not just more padded.
-    val glyphSize = (keyHeight.value * 0.34f).sp
-    val hintSize = (keyHeight.value * 0.15f).sp
+    // (29sp at the 72dp default), not just more padded.
+    val glyphSize = (keyHeight.value * 0.40f).sp
+    val hintSize = (keyHeight.value * 0.24f).sp
 
     val label = when (key.type) {
         KeyTypes.SHIFT -> if (ui.capsLock) "⇪" else if (ui.shiftVisual) "⬆" else "⇧"
         KeyTypes.BACKSPACE -> "⌫"
         KeyTypes.ENTER -> "⏎"
         KeyTypes.SPACE -> "◄  ${ui.spaceLabel}  ►"
-        else -> if (ui.uppercase) key.label.uppercase() else key.label
+        else -> bengaliDisplayLabel(if (ui.uppercase) key.label.uppercase() else key.label)
     }
 
     // P6.2: what a tap does, exposed to TalkBack as the click action — the raw pointerInput
@@ -298,9 +343,12 @@ private fun KeyView(
                                 onAction(KeyAction.Text(key.popup[selectedAlt]))
                                 break
                             }
-                            // Cells start at the key's left edge (the popup is anchored there).
-                            selectedAlt = (change.position.x / cell).toInt()
-                                .coerceIn(0, key.popup.lastIndex)
+                            // Cells normally start at the key's left edge and extend rightward.
+                            // The last key in a row has no room to its right (screen edge), so its
+                            // popup instead anchors at the key's right edge and extends leftward —
+                            // mirror the sign so a left-swipe still advances the selection.
+                            val raw = if (popupExpandsLeft) -change.position.x else change.position.x
+                            selectedAlt = (raw / cell).toInt().coerceIn(0, key.popup.lastIndex)
                         }
                     }
                 }
@@ -395,25 +443,52 @@ private fun KeyView(
             .then(gestures),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            color = if (key.type == KeyTypes.SHIFT && ui.shiftVisual) theme.accent else theme.label,
-            fontSize = if (key.type == KeyTypes.SPACE) 14.sp else glyphSize,
-            textAlign = TextAlign.Center,
-        )
+        when (key.type) {
+            KeyTypes.EMOJI -> Icon(
+                painter = painterResource(R.drawable.ic_emoji),
+                contentDescription = null,
+                tint = theme.label,
+                modifier = Modifier.size((keyHeight.value * 0.42f).dp),
+            )
+            // Wide-viewport vector instead of the ⇧/⬆/⇪ glyphs: those read as too thin/narrow at
+            // any font size, and scaling text non-uniformly fights Compose's font-padding metrics
+            // (glyph ends up visibly off-center). A dedicated shape gives exact width and centering.
+            KeyTypes.SHIFT -> Icon(
+                painter = painterResource(R.drawable.ic_shift_arrow),
+                contentDescription = null,
+                tint = if (ui.shiftVisual || ui.capsLock) theme.accent else theme.label,
+                modifier = Modifier
+                    .width((keyHeight.value * 0.48f).dp)
+                    .height((keyHeight.value * 0.30f).dp),
+            )
+            else -> Text(
+                text = label,
+                color = theme.label,
+                fontSize = if (key.type == KeyTypes.SPACE) 16.sp else glyphSize,
+                fontFamily = keyLabelFontFor(label),
+                textAlign = TextAlign.Center,
+            )
+        }
         // Long-press hint: first popup char, top-right corner (matches the original's superscripts).
         if (key.popup.isNotEmpty()) {
+            val hint = key.popup.first()
             Text(
-                text = key.popup.first(),
+                text = bengaliDisplayLabel(hint),
                 color = theme.hint,
                 fontSize = hintSize,
+                fontFamily = keyLabelFontFor(hint),
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 5.dp),
             )
         }
 
         if (popupOpen) {
             // Display-only: the still-held finger drives selection (slide) and commit (release).
+            // Normally the popup anchors at the key's left edge and cells extend rightward; a
+            // right-edge key instead anchors at its right edge, extending leftward, with cell
+            // order reversed so index 0 still sits directly over the key (fix-1).
+            val entries = key.popup.withIndex().let { if (popupExpandsLeft) it.reversed() else it }
             Popup(
+                alignment = if (popupExpandsLeft) Alignment.TopEnd else Alignment.TopStart,
                 offset = IntOffset(0, popupYOffset),
                 onDismissRequest = { popupOpen = false },
             ) {
@@ -422,7 +497,7 @@ private fun KeyView(
                         .background(theme.popupBg, RoundedCornerShape(8.dp))
                         .padding(vertical = 6.dp),
                 ) {
-                    key.popup.forEachIndexed { index, alt ->
+                    entries.forEach { (index, alt) ->
                         Box(
                             Modifier
                                 .width(POPUP_CELL)
@@ -433,9 +508,10 @@ private fun KeyView(
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = alt,
+                                text = bengaliDisplayLabel(alt),
                                 color = if (index == selectedAlt) theme.accent else theme.label,
-                                fontSize = 22.sp,
+                                fontSize = 32.sp,
+                                fontFamily = keyLabelFontFor(alt),
                                 modifier = Modifier.padding(vertical = 4.dp),
                             )
                         }

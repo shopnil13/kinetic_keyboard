@@ -129,6 +129,12 @@ private fun SettingsScreen(
             valueRange = KeyboardPrefs.MIN_LONG_PRESS_MS.toFloat()..KeyboardPrefs.MAX_LONG_PRESS_MS.toFloat(),
         )
 
+        // English (LATIN mode) only — Bangla/UniJoy and Phonetic never autocorrect regardless
+        // of this setting.
+        SettingSwitch("Autocorrect (English)", prefs.autocorrectEnabled) {
+            scope.launch { prefsRepo.setAutocorrect(it) }
+        }
+
         HorizontalDivider()
         Text("Feedback", style = MaterialTheme.typography.titleMedium)
 

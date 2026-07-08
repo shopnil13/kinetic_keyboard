@@ -17,6 +17,8 @@ data class KeyboardPrefs(
     val sound: Boolean = false,
     /** How long a key must be held before the long-press popup opens. */
     val longPressMs: Int = DEFAULT_LONG_PRESS_MS,
+    /** English-only (LATIN mode); Bangla/UniJoy and Phonetic never autocorrect regardless. */
+    val autocorrectEnabled: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_KEY_HEIGHT = 72
@@ -38,6 +40,7 @@ class PrefsRepository(private val context: Context) {
         val haptics = booleanPreferencesKey("haptics")
         val sound = booleanPreferencesKey("sound")
         val longPress = intPreferencesKey("long_press_ms")
+        val autocorrect = booleanPreferencesKey("autocorrect_enabled")
     }
 
     val prefs: Flow<KeyboardPrefs> = context.store.data.map { p ->
@@ -49,6 +52,7 @@ class PrefsRepository(private val context: Context) {
             sound = p[Keys.sound] ?: false,
             longPressMs = (p[Keys.longPress] ?: KeyboardPrefs.DEFAULT_LONG_PRESS_MS)
                 .coerceIn(KeyboardPrefs.MIN_LONG_PRESS_MS, KeyboardPrefs.MAX_LONG_PRESS_MS),
+            autocorrectEnabled = p[Keys.autocorrect] ?: true,
         )
     }
 
@@ -57,4 +61,5 @@ class PrefsRepository(private val context: Context) {
     suspend fun setHaptics(on: Boolean) = context.store.edit { it[Keys.haptics] = on }
     suspend fun setSound(on: Boolean) = context.store.edit { it[Keys.sound] = on }
     suspend fun setLongPressMs(ms: Int) = context.store.edit { it[Keys.longPress] = ms }
+    suspend fun setAutocorrect(on: Boolean) = context.store.edit { it[Keys.autocorrect] = on }
 }
