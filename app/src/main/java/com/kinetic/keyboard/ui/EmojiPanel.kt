@@ -1,10 +1,13 @@
 package com.kinetic.keyboard.ui
 
+import android.content.res.Configuration
+import android.view.ContextThemeWrapper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -29,16 +32,30 @@ fun EmojiPanel(
     onDelete: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().height(height).background(theme.background)) {
-        AndroidView(
-            factory = { context ->
-                EmojiPickerView(context).apply {
-                    emojiGridColumns = 9
-                    setRecentEmojiProvider(recentEmojiProvider)
-                    setOnEmojiPickedListener { onEmoji(it.emoji) }
-                }
-            },
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        )
+        // The picker is a classic View: its header/category colours come from the platform
+        // theme of the Context it is built with, not from KbTheme. The IME's own theme is
+        // Material.Light, which left the headers unreadable on the dark palette — hand it a
+        // matching dark/light theme + night uiMode, and rebuild it when the palette flips.
+        key(theme.isDark) {
+            AndroidView(
+                factory = { context ->
+                    val night = if (theme.isDark) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+                    val config = Configuration(context.resources.configuration).apply {
+                        uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
+                    }
+                    val themed = ContextThemeWrapper(
+                        context.createConfigurationContext(config),
+                        if (theme.isDark) android.R.style.Theme_Material else android.R.style.Theme_Material_Light,
+                    )
+                    EmojiPickerView(themed).apply {
+                        emojiGridColumns = 9
+                        setRecentEmojiProvider(recentEmojiProvider)
+                        setOnEmojiPickedListener { onEmoji(it.emoji) }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+        }
         MediaTabBar(
             active = PanelMode.EMOJI,
             theme = theme,

@@ -3,7 +3,6 @@ package com.kinetic.keyboard.service
 import android.content.ClipDescription
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
-import android.view.HapticFeedbackConstants
 import android.view.View
 import android.text.InputType
 import android.view.inputmethod.EditorInfo
@@ -22,6 +21,7 @@ import androidx.core.view.inputmethod.InputContentInfoCompat
 import androidx.emoji2.bundled.BundledEmojiCompatConfig
 import androidx.emoji2.text.EmojiCompat
 import com.kinetic.keyboard.BuildConfig
+import com.kinetic.keyboard.data.KeyHaptics
 import com.kinetic.keyboard.data.KeyboardPrefs
 import com.kinetic.keyboard.data.PerAppLanguage
 import com.kinetic.keyboard.data.PrefsRepository
@@ -119,8 +119,10 @@ class KeyboardImeService : InputMethodService() {
 
         // P5.5 rev2: EmojiCompat with the bundled Noto font — full modern emoji coverage on
         // every device, fully offline (no downloadable-font provider; see PRIVACY.md).
+        // replaceAll: without it EmojiCompat only substitutes glyphs the system font lacks, so
+        // the picker mixes the OEM's emoji art with Noto (seen on a docomo Huawei, API 28).
         if (!EmojiCompat.isConfigured()) {
-            EmojiCompat.init(BundledEmojiCompatConfig(this))
+            EmojiCompat.init(BundledEmojiCompatConfig(this).setReplaceAll(true))
         }
         emojiRecentsStore = EmojiRecents(File(filesDir, "emoji_recents.txt"))
         recentEmojiProvider = FileRecentEmojiProvider(emojiRecentsStore, scope)
@@ -171,11 +173,11 @@ class KeyboardImeService : InputMethodService() {
         return composeView
     }
 
-    /** P5.4: key feedback, honoring the user's toggles. */
+    private val haptics by lazy { KeyHaptics(this) }
+
+    /** P5.4: key feedback, honoring the user's toggles and vibration strength. */
     private fun feedback(action: KeyAction) {
-        if (currentPrefs.haptics) {
-            keyboardView?.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-        }
+        if (currentPrefs.haptics) haptics.vibrate(currentPrefs.hapticStrength, keyboardView)
         if (currentPrefs.sound) {
             val am = getSystemService(AUDIO_SERVICE) as AudioManager
             val fx = when (action) {

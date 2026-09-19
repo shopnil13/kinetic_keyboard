@@ -1,6 +1,7 @@
 package com.kinetic.keyboard.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 /**
  * Keyboard color theme (SPEC.md P5.2). Kept as a plain data class (not MaterialTheme) so the IME
@@ -18,6 +19,9 @@ data class KbTheme(
     val stripBg: Color,
     val stripDivider: Color,
 ) {
+    /** Drives the platform theme handed to non-Compose views (the AndroidX emoji picker). */
+    val isDark: Boolean get() = background.luminance() < 0.5f
+
     companion object {
         /** The reference photos' look. */
         val Dark = KbTheme(

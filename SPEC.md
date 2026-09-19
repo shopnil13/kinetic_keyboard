@@ -418,8 +418,8 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 - [x] **P5.1** Settings — MainActivity is now a Compose settings screen backed by DataStore (`PrefsRepository`): theme mode, key height slider (52–88dp), haptics, sound. Changes apply live in the IME. *Verified on emulator.*
 - [~] **P5.2** Theme system — `KbTheme` palettes: Dark (reference-photo look) + Light + follow-system; instant switch, no restart. *Verified. Custom/wallpaper-adaptive themes still open.* `deps: P1.9`
 - [~] **P5.3** Sizing prefs — key height live from settings. *Number-row toggle, punctuation-strip toggle, one-handed offset still open.* `deps: P5.1`
-- [x] **P5.4** Feedback — haptics (KEYBOARD_TAP) + key sound (standard/delete/space/return effects), both toggleable, off-by-default sound. *Done.*
-- [~] **P5.5** Emoji panel — AndroidX EmojiPickerView + EmojiCompat bundled font (offline, renders everywhere): categories, skin-tone variants, file-backed recents, dedicated 😊 key. DoD met; search + emoji suggestions still open. *DoD: inserts emoji; recents persist.* `deps: P1.9`
+- [x] **P5.4** Feedback — haptics via `Vibrator` one-shot with a Low/Medium/High strength setting (`KeyHaptics`, VIBRATE permission; preview pulse in settings) + key sound (standard/delete/space/return effects), both toggleable, off-by-default sound. *Done; verified on Huawei API 28 (2026-09-19).*
+- [~] **P5.5** Emoji panel — AndroidX EmojiPickerView + EmojiCompat bundled font (offline, renders everywhere; `replaceAll=true` so OEM emoji fonts never leak into the picker — found on a docomo Huawei): categories, skin-tone variants, file-backed recents, dedicated 😊 key; picker gets a dark/light platform theme matching KbTheme. DoD met; search + emoji suggestions still open. *DoD: inserts emoji; recents persist.* `deps: P1.9`
 - [ ] **P5.6** Clipboard manager — Room-backed history, pin, auto-expire. *DoD: copy→appears→paste; expiry works.*
 - [ ] **P5.7** Voice input — delegate to system speech recognizer via the mic key. *DoD: dictation inserts text.*
 - [x] **P5.8** Per-app language/mode memory (app_langs.tsv, restored in onStartInputView). *DoD: reopening an app restores its last mode.* `deps: P5.1`
@@ -432,10 +432,10 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 ---
 
 ### P6 — Hardening & release
-- [ ] **P6.1** Device/OEM matrix — Bengali shaping across fonts/Android versions; bundle fallback font. *DoD: no rendering regressions on the matrix.*
+- [~] **P6.1** Device/OEM matrix — Bengali shaping across fonts/Android versions; bundle fallback font. *2026-09-19: Huawei HW-01K / Android 9 (API 28 floor) passes all layers, popups, phonetic, suggestions, emoji, GIF; still need one API 34/35 device.* *DoD: no rendering regressions on the matrix.*
 - [~] **P6.2** Accessibility — keys/popups expose Button role + click actions, glyphs get spoken labels. On-device TalkBack pass pending. *DoD: navigable via screen reader.*
 - [ ] **P6.3** Performance pass — cold start, memory, sustained key latency. *DoD: meets budget from P1.14.*
-- [x] **P6.4** Privacy review — PRIVACY.md + PrivacyGuaranteeTest (zero permissions, OS-enforced); private fields never learned/autocorrected/suggested. *DoD: written statement + a test asserting no egress while typing.*
+- [x] **P6.4** Privacy review — PRIVACY.md + PrivacyGuaranteeTest (only INTERNET + VIBRATE, OS-enforced); private fields never learned/autocorrected/suggested; auto-backup/device-transfer disabled (`allowBackup=false` + extraction/backup rules) so learned words never reach Google Drive. *DoD: written statement + a test asserting no egress while typing.*
 - [ ] **P6.5** Store assets — listing, screenshots, privacy policy, content rating. *DoD: Play Console draft complete.*
 - [~] **P6.6** Release engineering — R8 minify+shrink verified (2.5 MB APK), serializer keep rules, v0.2.0. Remaining: owner keystore + signed AAB. *DoD: signed AAB builds & runs.*
 - [ ] **P6.7** Closed beta — internal/closed track, collect feedback, triage. *DoD: beta live, feedback loop running.* `deps: P6.6`

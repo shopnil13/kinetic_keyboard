@@ -9,11 +9,22 @@ import com.kinetic.keyboard.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+/**
+ * Keypress vibration strength. Amplitude is honoured on motors with amplitude control; the
+ * duration step keeps the levels distinguishable on motors without it.
+ */
+enum class HapticStrength(val durationMs: Long, val amplitude: Int) {
+    LOW(8L, 60),
+    MEDIUM(14L, 140),
+    HIGH(24L, 255),
+}
+
 /** User preferences (SPEC.md P5.1), shared by the IME service and the settings screen. */
 data class KeyboardPrefs(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val keyHeightDp: Int = DEFAULT_KEY_HEIGHT,
     val haptics: Boolean = true,
+    val hapticStrength: HapticStrength = HapticStrength.MEDIUM,
     val sound: Boolean = false,
     /** How long a key must be held before the long-press popup opens. */
     val longPressMs: Int = DEFAULT_LONG_PRESS_MS,
@@ -38,6 +49,7 @@ class PrefsRepository(private val context: Context) {
         val theme = intPreferencesKey("theme_mode")
         val keyHeight = intPreferencesKey("key_height_dp")
         val haptics = booleanPreferencesKey("haptics")
+        val hapticStrength = intPreferencesKey("haptic_strength")
         val sound = booleanPreferencesKey("sound")
         val longPress = intPreferencesKey("long_press_ms")
         val autocorrect = booleanPreferencesKey("autocorrect_enabled")
@@ -49,6 +61,7 @@ class PrefsRepository(private val context: Context) {
             keyHeightDp = (p[Keys.keyHeight] ?: KeyboardPrefs.DEFAULT_KEY_HEIGHT)
                 .coerceIn(KeyboardPrefs.MIN_KEY_HEIGHT, KeyboardPrefs.MAX_KEY_HEIGHT),
             haptics = p[Keys.haptics] ?: true,
+            hapticStrength = HapticStrength.entries.getOrElse(p[Keys.hapticStrength] ?: 1) { HapticStrength.MEDIUM },
             sound = p[Keys.sound] ?: false,
             longPressMs = (p[Keys.longPress] ?: KeyboardPrefs.DEFAULT_LONG_PRESS_MS)
                 .coerceIn(KeyboardPrefs.MIN_LONG_PRESS_MS, KeyboardPrefs.MAX_LONG_PRESS_MS),
@@ -59,6 +72,7 @@ class PrefsRepository(private val context: Context) {
     suspend fun setThemeMode(mode: ThemeMode) = context.store.edit { it[Keys.theme] = mode.ordinal }
     suspend fun setKeyHeight(dp: Int) = context.store.edit { it[Keys.keyHeight] = dp }
     suspend fun setHaptics(on: Boolean) = context.store.edit { it[Keys.haptics] = on }
+    suspend fun setHapticStrength(s: HapticStrength) = context.store.edit { it[Keys.hapticStrength] = s.ordinal }
     suspend fun setSound(on: Boolean) = context.store.edit { it[Keys.sound] = on }
     suspend fun setLongPressMs(ms: Int) = context.store.edit { it[Keys.longPress] = ms }
     suspend fun setAutocorrect(on: Boolean) = context.store.edit { it[Keys.autocorrect] = on }

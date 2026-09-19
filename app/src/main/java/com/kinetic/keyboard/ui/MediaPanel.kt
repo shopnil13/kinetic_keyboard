@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -40,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.decode.ImageDecoderDecoder
+import com.kinetic.keyboard.R
 import com.kinetic.keyboard.giphy.GiphyItem
 import com.kinetic.keyboard.ui.theme.KbTheme
 import kotlinx.coroutines.Job
@@ -201,7 +205,9 @@ fun MediaTabBar(
 ) {
     Row(Modifier.fillMaxWidth().height(44.dp)) {
         BarKey("ABC", false, theme, Modifier.weight(2f), "Back to letters", onBack)
-        BarKey("😊", active == PanelMode.EMOJI, theme, Modifier.weight(2f), "Emoji") {
+        // Vector icon, not the 😊 glyph: the glyph followed the OEM emoji font (docomo line-art
+        // on some Huawei builds) and looked nothing like the keyboard's own emoji key.
+        BarIconKey(R.drawable.ic_emoji, active == PanelMode.EMOJI, theme, Modifier.weight(2f), "Emoji") {
             onTab(PanelMode.EMOJI)
         }
         BarKey("GIF", active == PanelMode.GIF, theme, Modifier.weight(2f), "GIFs") {
@@ -236,6 +242,36 @@ private fun BarKey(
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = if (active) theme.accent else theme.label, fontSize = 15.sp)
+    }
+}
+
+@Composable
+private fun BarIconKey(
+    icon: Int,
+    active: Boolean,
+    theme: KbTheme,
+    modifier: Modifier,
+    description: String,
+    onTap: () -> Unit,
+) {
+    Box(
+        modifier
+            .fillMaxHeight()
+            .padding(horizontal = 2.dp, vertical = 3.dp)
+            .background(if (active) theme.keyPressed else theme.keyModifier, RoundedCornerShape(7.dp))
+            .semantics {
+                role = Role.Button
+                contentDescription = description
+            }
+            .clickable(onClick = onTap),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = if (active) theme.accent else theme.label,
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 

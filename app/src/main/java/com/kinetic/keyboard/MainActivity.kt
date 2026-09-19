@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.kinetic.keyboard.data.HapticStrength
+import com.kinetic.keyboard.data.KeyHaptics
 import com.kinetic.keyboard.data.KeyboardPrefs
 import com.kinetic.keyboard.data.PrefsRepository
 import com.kinetic.keyboard.ui.theme.ThemeMode
@@ -45,11 +47,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefsRepo = PrefsRepository(applicationContext)
+        val haptics = KeyHaptics(applicationContext)
         setContent {
             MaterialTheme {
                 Surface {
                     SettingsScreen(
                         prefsRepo = prefsRepo,
+                        onPreviewHaptic = { haptics.vibrate(it) },
                         onEnable = { startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) },
                         onChoose = {
                             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
@@ -65,6 +69,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun SettingsScreen(
     prefsRepo: PrefsRepository,
+    onPreviewHaptic: (HapticStrength) -> Unit,
     onEnable: () -> Unit,
     onChoose: () -> Unit,
 ) {
@@ -140,6 +145,29 @@ private fun SettingsScreen(
 
         SettingSwitch("Vibrate on keypress", prefs.haptics) {
             scope.launch { prefsRepo.setHaptics(it) }
+        }
+        if (prefs.haptics) {
+            Text("Vibration strength", style = MaterialTheme.typography.bodyMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HapticStrength.entries.forEach { level ->
+                    FilterChip(
+                        selected = prefs.hapticStrength == level,
+                        onClick = {
+                            onPreviewHaptic(level) // let the user feel the level they just picked
+                            scope.launch { prefsRepo.setHapticStrength(level) }
+                        },
+                        label = {
+                            Text(
+                                when (level) {
+                                    HapticStrength.LOW -> "Low"
+                                    HapticStrength.MEDIUM -> "Medium"
+                                    HapticStrength.HIGH -> "High"
+                                },
+                            )
+                        },
+                    )
+                }
+            }
         }
         SettingSwitch("Sound on keypress", prefs.sound) {
             scope.launch { prefsRepo.setSound(it) }

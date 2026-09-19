@@ -8,7 +8,8 @@ import org.junit.Test
 /**
  * P6.4 (revised for P5.10): the typing path never touches the network. Since the GIF/sticker
  * panel (GIPHY) needs INTERNET, the guarantee is now enforced three ways:
- *  1. the manifest may hold ONLY the INTERNET permission — nothing else, ever;
+ *  1. the manifest may hold ONLY INTERNET (GIF panel) and VIBRATE (keypress haptics, a
+ *     "normal" permission with no data access) — nothing else, ever;
  *  2. dependencies may not smuggle in additional network/state permissions;
  *  3. network code (java.net / http clients) may exist ONLY in the giphy package, so no
  *     typing, learning, or suggestion code can physically reach the network.
@@ -16,7 +17,10 @@ import org.junit.Test
  */
 class PrivacyGuaranteeTest {
 
-    private val allowedPermissions = setOf("android.permission.INTERNET")
+    private val allowedPermissions = setOf(
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE",
+    )
 
     private val forbiddenExtras = listOf(
         "android.permission.ACCESS_NETWORK_STATE",
@@ -42,12 +46,12 @@ class PrivacyGuaranteeTest {
     }
 
     @Test
-    fun `manifest holds only the INTERNET permission`() {
+    fun `manifest holds only the INTERNET and VIBRATE permissions`() {
         val manifest = File(moduleDir(), "src/main/AndroidManifest.xml").readText()
         val declared = Regex("<uses-permission[^>]*android:name=\"([^\"]+)\"")
             .findAll(manifest).map { it.groupValues[1] }.toSet()
         assertEquals(
-            "Only INTERNET is permitted (GIF/sticker panel) — see PRIVACY.md before adding any.",
+            "Only INTERNET (GIF/sticker panel) and VIBRATE (haptics) are permitted — see PRIVACY.md before adding any.",
             allowedPermissions, declared,
         )
     }
