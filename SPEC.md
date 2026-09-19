@@ -317,7 +317,7 @@ This is the single source of truth for build progress. Every unit of work is a t
 | P3 | Banglish phonetic (port) | 1–2 wk | 🟡 ported + corpus green; refactor (P3.6) & candidates (P3.7→P4) open | Kotlin output == reference behavior on corpus |
 | P4 | Suggestions / prediction / autocorrect | 2 wk | 🟢 done (Room user-dict migration & static n-grams remain as refinements) | Relevant suggestions in all 3 modes |
 | P5 | Parity polish (themes, emoji, settings, …) | ongoing | 🟡 settings/themes/feedback/emoji/per-app-language live; clipboard/voice/gestures open | P1.2 feature set complete |
-| P6 | Hardening & release | 1–2 wk | 🟡 privacy + R8 + a11y semantics + CI done; device matrix, perf, store, signing open | Passes device matrix; shippable build |
+| P6 | Hardening & release | 1–2 wk | 🟡 privacy + R8 + signing + a11y semantics + CI done; v0.3.0 signed APK sideloadable; device matrix (API 34/35), perf, store listing open | Passes device matrix; shippable build |
 
 Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 
@@ -437,7 +437,7 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 - [ ] **P6.3** Performance pass — cold start, memory, sustained key latency. *DoD: meets budget from P1.14.*
 - [x] **P6.4** Privacy review — PRIVACY.md + PrivacyGuaranteeTest (only INTERNET + VIBRATE, OS-enforced); private fields never learned/autocorrected/suggested; auto-backup/device-transfer disabled (`allowBackup=false` + extraction/backup rules) so learned words never reach Google Drive. *DoD: written statement + a test asserting no egress while typing.*
 - [ ] **P6.5** Store assets — listing, screenshots, privacy policy, content rating. *DoD: Play Console draft complete.*
-- [~] **P6.6** Release engineering — R8 minify+shrink verified (2.5 MB APK), serializer keep rules, v0.2.0. Remaining: owner keystore + signed AAB. *DoD: signed AAB builds & runs.*
+- [x] **P6.6** Release engineering — R8 minify+shrink, serializer keep rules, signing config fed from `local.properties`/env (`release.*`; unsigned when absent so CI still runs R8), v0.3.0 signed APK + AAB built; signed release verified on the API 28 device (2026-09-19). Keystore lives in `keystore/` (gitignored). *DoD met.*
 - [ ] **P6.7** Closed beta — internal/closed track, collect feedback, triage. *DoD: beta live, feedback loop running.* `deps: P6.6`
 
 **🚦 Gate P6:** passes the device matrix, privacy guarantee holds, signed build shippable to Play.

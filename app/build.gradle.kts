@@ -7,12 +7,31 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// P5.10: GIPHY API key stays out of git — paste `giphy.apiKey=YOUR_KEY` into local.properties.
-val giphyApiKey: String = Properties().run {
+// Secrets stay out of git: local.properties (gitignored) first, environment second.
+val localProps: Properties = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use(::load)
-    getProperty("giphy.apiKey") ?: ""
 }
+
+fun secret(prop: String, env: String): String? =
+    localProps.getProperty(prop)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(env)?.takeIf { it.isNotBlank() }
+
+// P5.10: GIPHY API key — `giphy.apiKey=YOUR_KEY` in local.properties, or GIPHY_API_KEY env.
+val giphyApiKey: String = secret("giphy.apiKey", "GIPHY_API_KEY") ?: ""
+
+// P6.6: release signing. Provide all four to sign; omit them and the release build stays
+// unsigned (what CI does — R8 still runs). local.properties keys / env vars:
+//   release.storeFile     / RELEASE_STORE_FILE      (absolute path, or relative to app/)
+//   release.storePassword / RELEASE_STORE_PASSWORD
+//   release.keyAlias      / RELEASE_KEY_ALIAS
+//   release.keyPassword   / RELEASE_KEY_PASSWORD
+val releaseStoreFile = secret("release.storeFile", "RELEASE_STORE_FILE")
+val releaseStorePassword = secret("release.storePassword", "RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = secret("release.keyAlias", "RELEASE_KEY_ALIAS")
+val releaseKeyPassword = secret("release.keyPassword", "RELEASE_KEY_PASSWORD")
+val hasReleaseSigning = listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+    .all { it != null }
 
 android {
     namespace = "com.kinetic.keyboard"
@@ -22,17 +41,31 @@ android {
         applicationId = "com.kinetic.keyboard"
         minSdk = 28
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "GIPHY_API_KEY", "\"$giphyApiKey\"")
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
     }
 
     buildTypes {
         release {
             // P6.6: minified + resource-shrunk release; keep rules live in proguard-rules.pro.
-            // Signing config is intentionally absent — the release keystore stays with the
-            // owner; CI and local builds verify R8 on the unsigned artifact.
+            // Signed only when the owner's keystore is configured (see `secret` above); CI and
+            // keystore-less local builds still verify R8 on the unsigned artifact.
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

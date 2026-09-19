@@ -16,8 +16,11 @@ Kotlin · Jetpack Compose · `InputMethodService` · minSdk 28 (Android 9) · co
 3. On the device: **Enable in Settings** → turn on Kinetic Keyboard → **Choose Keyboard** → select it.
 4. Tap the test field and type — the placeholder keys should insert text.
 
+## Building a release
+Release builds are signed when `local.properties` (or env) provides `release.storeFile`, `release.storePassword`, `release.keyAlias`, `release.keyPassword`; without them the release variant builds unsigned (CI). `./gradlew assembleRelease` → `app/build/outputs/apk/release/app-release.apk`; `bundleRelease` for the Play AAB. Keep the keystore backed up — updates must be signed with the same key.
+
 ## Status
-Phase 0 (scaffold + Compose-in-IME) — code in place; build/verify on a machine with the Android SDK. See [SPEC.md](SPEC.md) §10.1 dashboard.
+v0.3.0: P0–P4 complete, P5 partial (settings, themes, haptics, emoji, GIF, per-app language), signed release builds. See [SPEC.md](SPEC.md) §10.1 dashboard.
 
 ## Project layout
 ```

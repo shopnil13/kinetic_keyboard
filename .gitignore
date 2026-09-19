@@ -14,3 +14,5 @@ build/
 !debug.keystore
 
 # Reverse-engineering workspace lives outside this repo (D:/PROJECTS/RIDMIK)
+*.jks
+keystore/
