@@ -36,11 +36,11 @@
       { "type": "backspace", "width": 15 }
     ]},
     { "keys": [
-      { "type": "layerSwitch", "target": "symbols", "label": "?123", "width": 20 },
-      { "type": "emoji", "label": "😊" },
-      { "type": "space", "width": 40 },
-      { "label": "।", "popup": [",", "?", "!", ".", ":", ";"] },
-      { "type": "enter", "width": 20 }
+      { "type": "layerSwitch", "target": "symbols", "label": "?123", "width": 17.25 },
+      { "label": ",", "holdAction": "emoji" },
+      { "type": "space", "width": 45.5 },
+      { "label": "।", "popup": ["."] },
+      { "type": "enter", "width": 17.25 }
     ]}
   ]
 }

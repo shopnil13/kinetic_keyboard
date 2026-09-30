@@ -3,6 +3,7 @@ package com.kinetic.keyboard.service
 import android.content.ClipDescription
 import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
+import android.os.SystemClock
 import android.view.View
 import android.text.InputType
 import android.view.inputmethod.EditorInfo
@@ -40,6 +41,7 @@ import com.kinetic.keyboard.suggest.UserBigrams
 import com.kinetic.keyboard.suggest.UserDictionary
 import com.kinetic.keyboard.text.BanglaTextValidator
 import com.kinetic.keyboard.ui.KeyAction
+import com.kinetic.keyboard.ui.KeySound
 import com.kinetic.keyboard.ui.KeyboardScreen
 import com.kinetic.keyboard.ui.MediaStatus
 import com.kinetic.keyboard.ui.MediaUiState
@@ -155,6 +157,7 @@ class KeyboardImeService : InputMethodService() {
                     media = media,
                     recentEmojiProvider = recentEmojiProvider,
                     onAction = ::handleAction,
+                    onKeyDown = ::keyDownFeedback,
                     onSuggestion = ::commitSuggestion,
                     onMediaTab = ::switchPanel,
                     onMediaSearchOpen = {
@@ -174,25 +177,36 @@ class KeyboardImeService : InputMethodService() {
     }
 
     private val haptics by lazy { KeyHaptics(this) }
+    private val audio by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
+    private var lastDeleteFeedbackAt = 0L
 
-    /** P5.4: key feedback, honoring the user's toggles and vibration strength. */
-    private fun feedback(action: KeyAction) {
+    /**
+     * P5.4: key feedback on touch-down (called by the key views, not the commit path), honoring
+     * the user's toggles and vibration strength. It used to fire per committed action — on
+     * release for letters, on every 50 ms backspace repeat, and not at all without an input
+     * connection — so vibration trailed or smeared the touches it belonged to.
+     */
+    private fun keyDownFeedback(sound: KeySound) {
+        if (sound == KeySound.DELETE) {
+            // Auto-repeat deletes arrive every 50 ms; a pulse on each blurs into one rattle.
+            val now = SystemClock.uptimeMillis()
+            if (now - lastDeleteFeedbackAt < REPEAT_FEEDBACK_GAP_MS) return
+            lastDeleteFeedbackAt = now
+        }
         if (currentPrefs.haptics) haptics.vibrate(currentPrefs.hapticStrength, keyboardView)
         if (currentPrefs.sound) {
-            val am = getSystemService(AUDIO_SERVICE) as AudioManager
-            val fx = when (action) {
-                KeyAction.Delete -> AudioManager.FX_KEYPRESS_DELETE
-                KeyAction.Space -> AudioManager.FX_KEYPRESS_SPACEBAR
-                KeyAction.Enter -> AudioManager.FX_KEYPRESS_RETURN
-                else -> AudioManager.FX_KEYPRESS_STANDARD
+            val fx = when (sound) {
+                KeySound.DELETE -> AudioManager.FX_KEYPRESS_DELETE
+                KeySound.SPACE -> AudioManager.FX_KEYPRESS_SPACEBAR
+                KeySound.RETURN -> AudioManager.FX_KEYPRESS_RETURN
+                KeySound.STANDARD -> AudioManager.FX_KEYPRESS_STANDARD
             }
-            am.playSoundEffect(fx, 1.0f)
+            audio.playSoundEffect(fx, 1.0f)
         }
     }
 
     private fun handleAction(action: KeyAction) {
         val ic = currentInputConnection ?: return
-        feedback(action)
         // P5.10: while the GIPHY search bar is up, the keys type into the query, not the app.
         if (mediaUi.value.searchActive) {
             when (action) {
@@ -545,5 +559,10 @@ class KeyboardImeService : InputMethodService() {
         scope.cancel()
         lifecycleOwner.onDestroy()
         super.onDestroy()
+    }
+
+    private companion object {
+        /** Minimum spacing of backspace feedback: every other 50 ms auto-repeat. */
+        const val REPEAT_FEEDBACK_GAP_MS = 90L
     }
 }

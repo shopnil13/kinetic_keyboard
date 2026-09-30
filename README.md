@@ -20,7 +20,7 @@ Kotlin · Jetpack Compose · `InputMethodService` · minSdk 28 (Android 9) · co
 Release builds are signed when `local.properties` (or env) provides `release.storeFile`, `release.storePassword`, `release.keyAlias`, `release.keyPassword`; without them the release variant builds unsigned (CI). `./gradlew assembleRelease` → `app/build/outputs/apk/release/app-release.apk`; `bundleRelease` for the Play AAB. Keep the keystore backed up — updates must be signed with the same key.
 
 ## Status
-v0.3.0: P0–P4 complete, P5 partial (settings, themes, haptics, emoji, GIF, per-app language), signed release builds. See [SPEC.md](SPEC.md) §10.1 dashboard.
+v0.3.1: P0–P4 complete, P5 partial (settings, themes, haptics, emoji, GIF, per-app language), signed release builds. 0.3.1 brings back the comma key (hold for emoji), adds a danda key on UniJoy (hold for full stop), and fixes keypress vibration on newer phones. See [SPEC.md](SPEC.md) §10.1 dashboard.
 
 ## Project layout
 ```

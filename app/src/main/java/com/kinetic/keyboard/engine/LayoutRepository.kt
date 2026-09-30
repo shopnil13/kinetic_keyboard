@@ -39,6 +39,14 @@ object LayoutParser {
                     -> Unit
                     else -> error("${layout.id} row $r: unknown key type '${key.type}'")
                 }
+                key.holdAction?.let { action ->
+                    require(key.type == KeyTypes.CHAR && key.popup.isEmpty()) {
+                        "${layout.id} row $r: holdAction needs a char key without popup"
+                    }
+                    require(action == KeyTypes.EMOJI) {
+                        "${layout.id} row $r: unknown holdAction '$action'"
+                    }
+                }
             }
             require(total <= 100.5f) { "${layout.id} row $r: widths+gaps sum to $total%" }
         }

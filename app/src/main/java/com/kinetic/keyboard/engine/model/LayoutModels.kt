@@ -46,6 +46,11 @@ data class KeyDef(
     val gap: Float = 0f,
     /** Target layout for [KeyTypes.LAYER_SWITCH]. */
     val target: String? = null,
+    /**
+     * Char keys only: holding shows a single action button instead of text alternatives, and
+     * releasing on it performs the action. Only [KeyTypes.EMOJI] (comma key → emoji panel).
+     */
+    val holdAction: String? = null,
 ) {
     fun widthOrDefault(): Float = if (width > 0f) width else DEFAULT_WIDTH
 

@@ -88,18 +88,43 @@ class LayoutIntegrityTest {
         listOf("bn_unijoy", "bn_unijoy_shift", "en_qwerty").forEach { id ->
             val bottom = load(id).rows.last().keys
             assertEquals(KeyTypes.LAYER_SWITCH, bottom[0].type)
-            assertEquals(KeyTypes.EMOJI, bottom[1].type) // P5.5: dedicated emoji key
             assertEquals(KeyTypes.SPACE, bottom[2].type)
             assertEquals(KeyTypes.ENTER, bottom[4].type)
+            // v0.3.1: comma is back left of space; holding it opens the emoji panel.
+            assertEquals(KeyTypes.CHAR, bottom[1].type)
+            assertEquals(",", bottom[1].label)
+            assertEquals(KeyTypes.EMOJI, bottom[1].holdAction)
         }
     }
 
     @Test
-    fun `comma stays reachable after the emoji key took its spot`() {
-        // P5.5 moved "," off the bottom row; it must live in the punctuation key's popup.
-        listOf("bn_unijoy", "bn_unijoy_shift", "en_qwerty").forEach { id ->
-            val punctuation = load(id).rows.last().keys[3]
-            assertTrue("$id: ',' not in ${punctuation.label} popup", "," in punctuation.popup)
+    fun `bottom row keeps enter the same size on every layer`() {
+        // ?123/ABC and enter are 15% larger than the 15% shift key; space takes the rest.
+        allIds.forEach { id ->
+            val bottom = load(id).rows.last().keys
+            assertEquals("$id mode key", 17.25f, bottom[0].widthOrDefault(), 0.001f)
+            assertEquals("$id space", 45.5f, bottom[2].widthOrDefault(), 0.001f)
+            assertEquals("$id enter", 17.25f, bottom[4].widthOrDefault(), 0.001f)
+            assertEquals("$id total", 100f, bottom.sumOf { (it.gap + it.widthOrDefault()).toDouble() }.toFloat(), 0.001f)
         }
+    }
+
+    @Test
+    fun `unijoy has danda with full stop on hold, english a plain full stop`() {
+        listOf("bn_unijoy", "bn_unijoy_shift").forEach { id ->
+            val punctuation = load(id).rows.last().keys[3]
+            assertEquals("$id", "।", punctuation.label)
+            assertEquals("$id", listOf("."), punctuation.popup)
+        }
+        val period = load("en_qwerty").rows.last().keys[3]
+        assertEquals(".", period.label)
+        assertTrue(period.popup.isEmpty())
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `unknown hold action is rejected`() {
+        LayoutParser.parse(
+            """{ "id": "x", "rows": [ { "keys": [ { "label": ",", "holdAction": "settings" } ] } ] }""",
+        )
     }
 }

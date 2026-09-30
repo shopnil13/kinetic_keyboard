@@ -40,6 +40,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.Font
@@ -110,6 +111,18 @@ sealed interface KeyAction {
     data class EmojiInput(val emoji: String) : KeyAction
 }
 
+/**
+ * P5.4: the click sound a key plays. Feedback (sound + vibration) fires on touch-down, once per
+ * press, so it lines up with the finger instead of trailing the commit on release.
+ */
+enum class KeySound { STANDARD, DELETE, SPACE, RETURN }
+
+/** What releasing on a [KeyDef.holdAction] button does. */
+private fun holdActionOf(key: KeyDef): KeyAction? = when (key.holdAction) {
+    KeyTypes.EMOJI -> KeyAction.ToggleEmoji
+    else -> null
+}
+
 private const val REPEAT_INITIAL_MS = 350L
 private const val REPEAT_INTERVAL_MS = 50L
 
@@ -127,6 +140,7 @@ fun KeyboardScreen(
     media: MediaUiState,
     recentEmojiProvider: RecentEmojiProvider,
     onAction: (KeyAction) -> Unit,
+    onKeyDown: (KeySound) -> Unit,
     onSuggestion: (String) -> Unit,
     onMediaTab: (PanelMode) -> Unit,
     onMediaSearchOpen: () -> Unit,
@@ -158,10 +172,16 @@ fun KeyboardScreen(
                         recentEmojiProvider = recentEmojiProvider,
                         theme = theme,
                         height = panelHeight,
-                        onEmoji = { onAction(KeyAction.EmojiInput(it)) },
+                        onEmoji = {
+                            onKeyDown(KeySound.STANDARD)
+                            onAction(KeyAction.EmojiInput(it))
+                        },
                         onTab = onMediaTab,
                         onBack = { onMediaTab(PanelMode.NONE) },
-                        onDelete = { onAction(KeyAction.Delete) },
+                        onDelete = {
+                            onKeyDown(KeySound.DELETE)
+                            onAction(KeyAction.Delete)
+                        },
                     )
                     mediaMode && !media.searchActive -> MediaPanel(
                         mode = panelMode,
@@ -171,7 +191,10 @@ fun KeyboardScreen(
                         onSearchTap = onMediaSearchOpen,
                         onTab = onMediaTab,
                         onBack = { onMediaTab(PanelMode.NONE) },
-                        onDelete = { onAction(KeyAction.Delete) },
+                        onDelete = {
+                            onKeyDown(KeySound.DELETE)
+                            onAction(KeyAction.Delete)
+                        },
                         onPick = onMediaPick,
                     )
                     else -> {
@@ -187,7 +210,10 @@ fun KeyboardScreen(
                                 suggestions = suggestions,
                                 theme = theme,
                                 onSuggestion = onSuggestion,
-                                onPunctuation = { onAction(KeyAction.Text(it)) },
+                                onPunctuation = {
+                                    onKeyDown(KeySound.STANDARD)
+                                    onAction(KeyAction.Text(it))
+                                },
                             )
                         }
                         ui.layout.rows.forEach { row ->
@@ -205,6 +231,7 @@ fun KeyboardScreen(
                                         theme = theme,
                                         keyHeight = keyHeight,
                                         onAction = onAction,
+                                        onKeyDown = onKeyDown,
                                         // Last key in the row butts against the screen edge — its
                                         // popup has no room to expand rightward (P1.11 fix-1).
                                         popupExpandsLeft = index == row.keys.lastIndex,
@@ -229,6 +256,7 @@ private fun KeyView(
     theme: KbTheme,
     keyHeight: Dp,
     onAction: (KeyAction) -> Unit,
+    onKeyDown: (KeySound) -> Unit,
     popupExpandsLeft: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -242,6 +270,15 @@ private fun KeyView(
     // (29sp at the 72dp default), not just more padded.
     val glyphSize = (keyHeight.value * 0.40f).sp
     val hintSize = (keyHeight.value * 0.24f).sp
+    val holdAction = holdActionOf(key)
+    // Hold-action keys (comma → emoji) show one action button; other keys their text popups.
+    val popupCount = if (holdAction != null) 1 else key.popup.size
+    val sound = when (key.type) {
+        KeyTypes.BACKSPACE -> KeySound.DELETE
+        KeyTypes.SPACE -> KeySound.SPACE
+        KeyTypes.ENTER -> KeySound.RETURN
+        else -> KeySound.STANDARD
+    }
 
     val label = when (key.type) {
         KeyTypes.SHIFT -> if (ui.capsLock) "⇪" else if (ui.shiftVisual) "⬆" else "⇧"
@@ -303,6 +340,7 @@ private fun KeyView(
                 val down = awaitFirstDown()
                 down.consume()
                 pressed = true
+                onKeyDown(sound)
                 // Wait for release or the long-press timeout, whichever comes first.
                 // true = released (tap) · false = pointer lost · null = still held (long press).
                 // NB: changedToUp() is false on a consumed change — always check BEFORE consume().
@@ -319,7 +357,7 @@ private fun KeyView(
                 }
                 when {
                     released == true -> onAction(KeyAction.Text(key.outputText(ui.uppercase)))
-                    released == null && key.popup.isEmpty() -> {
+                    released == null && popupCount == 0 -> {
                         // Long hold with no alternatives: commit the key itself (as before).
                         onAction(KeyAction.Text(key.outputText(ui.uppercase)))
                         while (true) {
@@ -340,7 +378,7 @@ private fun KeyView(
                             val up = change.changedToUp()
                             change.consume()
                             if (up) {
-                                onAction(KeyAction.Text(key.popup[selectedAlt]))
+                                onAction(holdAction ?: KeyAction.Text(key.popup[selectedAlt]))
                                 break
                             }
                             // Cells normally start at the key's left edge and extend rightward.
@@ -348,7 +386,7 @@ private fun KeyView(
                             // popup instead anchors at the key's right edge and extends leftward —
                             // mirror the sign so a left-swipe still advances the selection.
                             val raw = if (popupExpandsLeft) -change.position.x else change.position.x
-                            selectedAlt = (raw / cell).toInt().coerceIn(0, key.popup.lastIndex)
+                            selectedAlt = (raw / cell).toInt().coerceIn(0, popupCount - 1)
                         }
                     }
                 }
@@ -359,10 +397,12 @@ private fun KeyView(
         KeyTypes.BACKSPACE -> Modifier.pointerInput(Unit) {
             detectTapGestures(onPress = {
                 pressed = true
+                onKeyDown(sound)
                 onAction(KeyAction.Delete)
                 val job: Job = scope.launch {
                     delay(REPEAT_INITIAL_MS)
                     while (true) {
+                        onKeyDown(sound) // the service thins repeat feedback
                         onAction(KeyAction.Delete)
                         delay(REPEAT_INTERVAL_MS)
                     }
@@ -375,7 +415,7 @@ private fun KeyView(
         KeyTypes.SPACE -> Modifier
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                    onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                     onTap = { onAction(KeyAction.Space) },
                     onLongPress = { onAction(KeyAction.ShowImePicker) },
                 )
@@ -392,31 +432,31 @@ private fun KeyView(
             }
         KeyTypes.SHIFT -> Modifier.pointerInput(Unit) {
             detectTapGestures(
-                onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                 onTap = { onAction(KeyAction.Shift) },
             )
         }
         KeyTypes.ENTER -> Modifier.pointerInput(Unit) {
             detectTapGestures(
-                onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                 onTap = { onAction(KeyAction.Enter) },
             )
         }
         KeyTypes.LAYER_SWITCH -> Modifier.pointerInput(key) {
             detectTapGestures(
-                onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                 onTap = { key.target?.let { onAction(KeyAction.LayerSwitch(it)) } },
             )
         }
         KeyTypes.TAB -> Modifier.pointerInput(Unit) {
             detectTapGestures(
-                onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                 onTap = { onAction(KeyAction.Text("\t")) },
             )
         }
         KeyTypes.EMOJI -> Modifier.pointerInput(Unit) {
             detectTapGestures(
-                onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                 onTap = { onAction(KeyAction.ToggleEmoji) },
             )
         }
@@ -431,6 +471,7 @@ private fun KeyView(
                 role = Role.Button
                 a11yLabel?.let { contentDescription = it }
                 primaryTap?.let { tap -> onClick { tap(); true } }
+                holdAction?.let { action -> onLongClick("Emoji") { onAction(action); true } }
             }
             .background(
                 when {
@@ -469,8 +510,19 @@ private fun KeyView(
                 textAlign = TextAlign.Center,
             )
         }
-        // Long-press hint: first popup char, top-right corner (matches the original's superscripts).
-        if (key.popup.isNotEmpty()) {
+        // Long-press hint, top-right corner (matches the original's superscripts): the hold
+        // action's icon, else the first popup char.
+        if (holdAction != null) {
+            Icon(
+                painter = painterResource(R.drawable.ic_emoji),
+                contentDescription = null,
+                tint = theme.hint,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 4.dp, end = 5.dp)
+                    .size((keyHeight.value * 0.22f).dp),
+            )
+        } else if (key.popup.isNotEmpty()) {
             val hint = key.popup.first()
             Text(
                 text = bengaliDisplayLabel(hint),
@@ -497,6 +549,23 @@ private fun KeyView(
                         .background(theme.popupBg, RoundedCornerShape(8.dp))
                         .padding(vertical = 6.dp),
                 ) {
+                    if (holdAction != null) {
+                        // Single action button (always selected — release anywhere triggers it).
+                        Box(
+                            Modifier
+                                .width(POPUP_CELL)
+                                .background(theme.keyPressed, RoundedCornerShape(6.dp))
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_emoji),
+                                contentDescription = null,
+                                tint = theme.accent,
+                                modifier = Modifier.size(30.dp),
+                            )
+                        }
+                    }
                     entries.forEach { (index, alt) ->
                         Box(
                             Modifier

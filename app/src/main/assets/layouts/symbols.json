@@ -37,11 +37,11 @@
       { "type": "backspace", "width": 15 }
     ]},
     { "keys": [
-      { "type": "layerSwitch", "target": "letters", "label": "ABC", "width": 20 },
+      { "type": "layerSwitch", "target": "letters", "label": "ABC", "width": 17.25 },
       { "label": "," },
-      { "type": "space", "width": 40 },
+      { "type": "space", "width": 45.5 },
       { "label": "." },
-      { "type": "enter", "width": 20 }
+      { "type": "enter", "width": 17.25 }
     ]}
   ]
 }

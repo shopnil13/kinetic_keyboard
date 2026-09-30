@@ -66,6 +66,8 @@ Row 3 — shift + 7 keys + backspace (primary / long-press):
 
 Bottom row (all letter layers): `?123` · `,` · **spacebar (label "◄ ইউনিজয় ►")** · `।`(danda)⚠VERIFY · emoji/enter.
 
+> **Shipped (v0.3.1, user decision):** `?123` 17.25% (15% larger than shift) · `,` 10% — hold opens the emoji panel · space 45.5% · UniJoy `।` 10% — hold for `.` / English & phonetic a plain `.` · enter 17.25%. Symbols layers use the same ABC/space/enter widths so enter never moves between layers.
+
 ### 2.2 Layer B — Bangla, shift (image 2)
 
 Row 1 (primary / long-press = Bengali digit):
@@ -418,8 +420,8 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done · ⛔ blocked.
 - [x] **P5.1** Settings — MainActivity is now a Compose settings screen backed by DataStore (`PrefsRepository`): theme mode, key height slider (52–88dp), haptics, sound. Changes apply live in the IME. *Verified on emulator.*
 - [~] **P5.2** Theme system — `KbTheme` palettes: Dark (reference-photo look) + Light + follow-system; instant switch, no restart. *Verified. Custom/wallpaper-adaptive themes still open.* `deps: P1.9`
 - [~] **P5.3** Sizing prefs — key height live from settings. *Number-row toggle, punctuation-strip toggle, one-handed offset still open.* `deps: P5.1`
-- [x] **P5.4** Feedback — haptics via `Vibrator` one-shot with a Low/Medium/High strength setting (`KeyHaptics`, VIBRATE permission; preview pulse in settings) + key sound (standard/delete/space/return effects), both toggleable, off-by-default sound. *Done; verified on Huawei API 28 (2026-09-19).*
-- [~] **P5.5** Emoji panel — AndroidX EmojiPickerView + EmojiCompat bundled font (offline, renders everywhere; `replaceAll=true` so OEM emoji fonts never leak into the picker — found on a docomo Huawei): categories, skin-tone variants, file-backed recents, dedicated 😊 key; picker gets a dark/light platform theme matching KbTheme. DoD met; search + emoji suggestions still open. *DoD: inserts emoji; recents persist.* `deps: P1.9`
+- [x] **P5.4** Feedback — haptics via `Vibrator` with a Low/Medium/High strength setting (`KeyHaptics`, VIBRATE permission; preview pulse in settings) + key sound (standard/delete/space/return effects), both toggleable, off-by-default sound. *Done; verified on Huawei API 28 (2026-09-19).* v0.3.1 fix for newer phones: feedback fires on touch-down (was on commit/release, and on every 50 ms backspace repeat); click primitive (API 30+) / confirmed predefined clicks before the one-shot fallback (floor raised from 8 ms/60 to 12 ms/110); on Android 13+ plays as touch usage, or media usage when the system "Touch feedback" switch is off (which otherwise silences it). *Needs an on-device check on API 33+.*
+- [~] **P5.5** Emoji panel — AndroidX EmojiPickerView + EmojiCompat bundled font (offline, renders everywhere; `replaceAll=true` so OEM emoji fonts never leak into the picker — found on a docomo Huawei): categories, skin-tone variants, file-backed recents, opened by holding the comma key (v0.3.1; was a dedicated 😊 key); picker gets a dark/light platform theme matching KbTheme. DoD met; search + emoji suggestions still open. *DoD: inserts emoji; recents persist.* `deps: P1.9`
 - [ ] **P5.6** Clipboard manager — Room-backed history, pin, auto-expire. *DoD: copy→appears→paste; expiry works.*
 - [ ] **P5.7** Voice input — delegate to system speech recognizer via the mic key. *DoD: dictation inserts text.*
 - [x] **P5.8** Per-app language/mode memory (app_langs.tsv, restored in onStartInputView). *DoD: reopening an app restores its last mode.* `deps: P5.1`

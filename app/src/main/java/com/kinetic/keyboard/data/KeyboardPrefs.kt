@@ -10,13 +10,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 /**
- * Keypress vibration strength. Amplitude is honoured on motors with amplitude control; the
- * duration step keeps the levels distinguishable on motors without it.
+ * Keypress vibration strength (see KeyHaptics). [clickScale] sizes the click primitive on motors
+ * that have one; the one-shot fallback uses [amplitude] on motors with amplitude control and the
+ * [durationMs] step on the rest. The old 8 ms / 60 low level often did not register on newer
+ * phones, hence the higher one-shot floor.
  */
-enum class HapticStrength(val durationMs: Long, val amplitude: Int) {
-    LOW(8L, 60),
-    MEDIUM(14L, 140),
-    HIGH(24L, 255),
+enum class HapticStrength(val durationMs: Long, val amplitude: Int, val clickScale: Float) {
+    LOW(12L, 110, 0.5f),
+    MEDIUM(20L, 180, 0.75f),
+    HIGH(30L, 255, 1f),
 }
 
 /** User preferences (SPEC.md P5.1), shared by the IME service and the settings screen. */
