@@ -44,6 +44,9 @@ class KeyHaptics(context: Context) {
         vibrator?.areAllEffectsSupported(
             VibrationEffect.EFFECT_TICK, VibrationEffect.EFFECT_CLICK, VibrationEffect.EFFECT_HEAVY_CLICK,
         ) == Vibrator.VIBRATION_EFFECT_SUPPORT_YES
+    private val predefinedDoubleClick = hasVibrator && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+        vibrator?.areAllEffectsSupported(VibrationEffect.EFFECT_DOUBLE_CLICK) ==
+        Vibrator.VIBRATION_EFFECT_SUPPORT_YES
 
     /**
      * One click sized by [strength]. Devices without a vibrator fall back to the view's
@@ -55,7 +58,10 @@ class KeyHaptics(context: Context) {
             fallbackView?.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
             return
         }
-        val effect = effectFor(strength)
+        play(v, effectFor(strength))
+    }
+
+    private fun play(v: Vibrator, effect: VibrationEffect) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             v.vibrate(effect, VibrationAttributes.createForUsage(usage()))
         } else {
@@ -100,5 +106,42 @@ class KeyHaptics(context: Context) {
             Settings.System.getInt(resolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0
         }.getOrDefault(true)
         return if (touchFeedbackOn) VibrationAttributes.USAGE_TOUCH else VibrationAttributes.USAGE_MEDIA
+    }
+
+    /**
+     * Two quick clicks — tells the finger "the popup is open, slide now" without lifting.
+     * Distinct from the single keypress click so the two events are never confused.
+     */
+    fun vibratePopup(strength: HapticStrength, fallbackView: View? = null) {
+        val v = vibrator
+        if (v == null || !hasVibrator) {
+            fallbackView?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            return
+        }
+        play(v, popupEffectFor(strength))
+    }
+
+    /** Same ladder as [effectFor], doubled: click primitives, then the vendor double click. */
+    private fun popupEffectFor(strength: HapticStrength): VibrationEffect {
+        if (clickPrimitive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return VibrationEffect.startComposition()
+                .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, strength.clickScale)
+                .addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, strength.clickScale, POPUP_GAP_MS.toInt())
+                .compose()
+        }
+        if (predefinedDoubleClick && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return VibrationEffect.createPredefined(VibrationEffect.EFFECT_DOUBLE_CLICK)
+        }
+        val amplitude = if (hasAmplitudeControl) strength.amplitude else VibrationEffect.DEFAULT_AMPLITUDE
+        val d = strength.durationMs
+        return VibrationEffect.createWaveform(
+            longArrayOf(0L, d, POPUP_GAP_MS, d),
+            intArrayOf(0, amplitude, 0, amplitude),
+            -1,
+        )
+    }
+
+    private companion object {
+        const val POPUP_GAP_MS = 60L
     }
 }

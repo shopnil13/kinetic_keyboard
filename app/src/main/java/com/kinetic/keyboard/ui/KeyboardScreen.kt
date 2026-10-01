@@ -109,6 +109,9 @@ sealed interface KeyAction {
 
     /** P5.5: commit an emoji chosen from the panel. */
     data class EmojiInput(val emoji: String) : KeyAction
+
+    /** Feedback-only: a long-press popup just opened. Commits nothing. */
+    data object PopupOpened : KeyAction
 }
 
 /**
@@ -371,6 +374,7 @@ private fun KeyView(
                     released == null -> {
                         selectedAlt = 0
                         popupOpen = true
+                        onAction(KeyAction.PopupOpened)
                         val cell = POPUP_CELL.toPx()
                         while (true) {
                             val event = awaitPointerEvent()

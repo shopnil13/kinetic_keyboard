@@ -31,7 +31,7 @@
       { "label": "ে", "popup": ["এ"] },
       { "label": "র", "popup": ["ল"] },
       { "label": "ন", "popup": ["ণ"] },
-      { "label": "স", "popup": ["ষ", "শ"] },
+      { "label": "স", "popup": ["শ", "ষ"] },
       { "label": "ম", "popup": ["ঃ"] },
       { "type": "backspace", "width": 15 }
     ]},

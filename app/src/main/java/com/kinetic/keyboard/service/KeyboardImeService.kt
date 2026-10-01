@@ -179,6 +179,9 @@ class KeyboardImeService : InputMethodService() {
     private val haptics by lazy { KeyHaptics(this) }
     private val audio by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
     private var lastDeleteFeedbackAt = 0L
+    private var lastDeleteDownAt = 0L
+    /** False once a backspace found nothing to delete (start of the field, empty query). */
+    private var lastDeleteRemovedText = true
 
     /**
      * P5.4: key feedback on touch-down (called by the key views, not the commit path), honoring
@@ -188,10 +191,17 @@ class KeyboardImeService : InputMethodService() {
      */
     private fun keyDownFeedback(sound: KeySound) {
         if (sound == KeySound.DELETE) {
-            // Auto-repeat deletes arrive every 50 ms; a pulse on each blurs into one rattle.
             val now = SystemClock.uptimeMillis()
+            // Backspace still held (auto-repeat) but the field is already empty: each repeat
+            // deletes nothing, so a buzz would only signal a press that does nothing.
+            val held = now - lastDeleteDownAt < DELETE_HOLD_WINDOW_MS
+            lastDeleteDownAt = now
+            if (held && !lastDeleteRemovedText) return
+            // Auto-repeat deletes arrive every 50 ms; a pulse on each blurs into one rattle.
             if (now - lastDeleteFeedbackAt < REPEAT_FEEDBACK_GAP_MS) return
             lastDeleteFeedbackAt = now
+        } else {
+            lastDeleteDownAt = 0L // any other key ends a backspace run
         }
         if (currentPrefs.haptics) haptics.vibrate(currentPrefs.hapticStrength, keyboardView)
         if (currentPrefs.sound) {
@@ -206,13 +216,22 @@ class KeyboardImeService : InputMethodService() {
     }
 
     private fun handleAction(action: KeyAction) {
+        if (action == KeyAction.PopupOpened) {
+            // Popup open is a hold, not a press: distinct pulse, no key click. Like key-down
+            // feedback, it doesn't depend on having an input connection.
+            if (currentPrefs.haptics) haptics.vibratePopup(currentPrefs.hapticStrength, keyboardView)
+            return
+        }
         val ic = currentInputConnection ?: return
         // P5.10: while the GIPHY search bar is up, the keys type into the query, not the app.
         if (mediaUi.value.searchActive) {
             when (action) {
                 is KeyAction.Text -> mediaUi.update { it.copy(query = it.query + action.text) }
                 KeyAction.Space -> mediaUi.update { it.copy(query = it.query + " ") }
-                KeyAction.Delete -> mediaUi.update { it.copy(query = it.query.dropLast(1)) }
+                KeyAction.Delete -> {
+                    lastDeleteRemovedText = mediaUi.value.query.isNotEmpty()
+                    mediaUi.update { it.copy(query = it.query.dropLast(1)) }
+                }
                 KeyAction.Enter -> {
                     mediaUi.update { it.copy(searchActive = false) }
                     loadMedia(mediaUi.value.query)
@@ -271,7 +290,7 @@ class KeyboardImeService : InputMethodService() {
                 ic.commitText(" ", 1)
                 stateMachine.onCharCommitted()
             }
-            KeyAction.Delete -> handleDelete()
+            KeyAction.Delete -> lastDeleteRemovedText = handleDelete()
             KeyAction.Enter -> {
                 learnCurrentWord(ic)
                 commitComposing(ic)
@@ -301,6 +320,7 @@ class KeyboardImeService : InputMethodService() {
                 commitComposing(ic)
                 ic.commitText(action.emoji, 1)
             }
+            KeyAction.PopupOpened -> Unit // feedback only; handled above
         }
         updateSuggestions(ic)
         // A manual shift tap is the user overriding caps — don't immediately fight it.
@@ -468,10 +488,10 @@ class KeyboardImeService : InputMethodService() {
      * P2.2 (revised per user decision): backspace removes the LAST KEYSTROKE, not the whole
      * grapheme cluster — কা ⌫ → ক (only the া goes). One code point per press, surrogate-safe,
      * matching the original Ridmik feel. Cluster segmentation (BengaliText) stays available for
-     * cursor logic later.
+     * cursor logic later. Returns false when there was nothing to delete.
      */
-    private fun handleDelete() {
-        val ic = currentInputConnection ?: return
+    private fun handleDelete(): Boolean {
+        val ic = currentInputConnection ?: return false
         // P4.7: one backspace right after an autocorrect reverts it (corrected+space → original).
         pendingUndo?.let { (original, corrected) ->
             pendingUndo = null
@@ -481,7 +501,7 @@ class KeyboardImeService : InputMethodService() {
                 ic.commitText(original, 1)
                 lastCommittedWord = ""
                 updateSuggestions(ic)
-                return
+                return true
             }
         }
         // P3.5: while composing Banglish, backspace edits the Roman buffer, not the Bangla text.
@@ -489,17 +509,18 @@ class KeyboardImeService : InputMethodService() {
             val text = phonetic.deleteLast()
             ic.setComposingText(text, 1)
             if (text.isEmpty()) ic.finishComposingText()
-            return
+            return true
         }
         val selected = ic.getSelectedText(0)
         if (!selected.isNullOrEmpty()) {
             ic.commitText("", 1)
-            return
+            return true
         }
         val before = ic.getTextBeforeCursor(8, 0) ?: ""
-        if (before.isEmpty()) return
+        if (before.isEmpty()) return false
         val n = Character.charCount(Character.codePointBefore(before, before.length))
         ic.deleteSurroundingText(n, 0)
+        return true
     }
 
     /** Action-aware enter: trigger the field's IME action (search/send/go) when one is set. */
@@ -564,5 +585,11 @@ class KeyboardImeService : InputMethodService() {
     private companion object {
         /** Minimum spacing of backspace feedback: every other 50 ms auto-repeat. */
         const val REPEAT_FEEDBACK_GAP_MS = 90L
+
+        /**
+         * Backspace touches closer together than this are one held press: longer than the
+         * 350 ms delay before auto-repeat starts (key view and emoji/GIF panel delete keys).
+         */
+        const val DELETE_HOLD_WINDOW_MS = 400L
     }
 }
