@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -125,6 +126,9 @@ private fun holdActionOf(key: KeyDef): KeyAction? = when (key.holdAction) {
     KeyTypes.EMOJI -> KeyAction.ToggleEmoji
     else -> null
 }
+
+/** Hold-action keys (comma → emoji) show one action button; other keys their text popups. */
+private fun popupCountOf(key: KeyDef): Int = if (holdActionOf(key) != null) 1 else key.popup.size
 
 private const val REPEAT_INITIAL_MS = 350L
 private const val REPEAT_INTERVAL_MS = 50L
@@ -274,8 +278,15 @@ private fun KeyView(
     val glyphSize = (keyHeight.value * 0.40f).sp
     val hintSize = (keyHeight.value * 0.24f).sp
     val holdAction = holdActionOf(key)
-    // Hold-action keys (comma → emoji) show one action button; other keys their text popups.
-    val popupCount = if (holdAction != null) 1 else key.popup.size
+    // The gesture loops below restart only when the key TYPE at this slot changes, and read the
+    // rest through State. Restarting cancels a press still in progress, and shift/auto-caps or
+    // the layer flips on the PREVIOUS key's release — so fast rollover typing ("He" with e
+    // pressed before H lifts) lost the second letter after its keypress vibration had fired.
+    val currentKey by rememberUpdatedState(key)
+    val uppercase by rememberUpdatedState(ui.uppercase)
+    val expandsLeft by rememberUpdatedState(popupExpandsLeft)
+    val currentOnAction by rememberUpdatedState(onAction)
+    val currentOnKeyDown by rememberUpdatedState(onKeyDown)
     val sound = when (key.type) {
         KeyTypes.BACKSPACE -> KeySound.DELETE
         KeyTypes.SPACE -> KeySound.SPACE
@@ -338,67 +349,80 @@ private fun KeyView(
         // P1.11 (slide-to-select): tap commits the key; holding opens the popup with the FIRST
         // alternative preselected, sliding sideways moves the selection, release commits it —
         // the finger never has to lift, matching Gboard/the original Ridmik feel.
-        KeyTypes.CHAR -> Modifier.pointerInput(key, ui.uppercase) {
+        KeyTypes.CHAR -> Modifier.pointerInput(key.type) {
             awaitEachGesture {
                 val down = awaitFirstDown()
                 down.consume()
                 pressed = true
-                onKeyDown(sound)
-                // Wait for release or the long-press timeout, whichever comes first.
-                // true = released (tap) · false = pointer lost · null = still held (long press).
-                // NB: changedToUp() is false on a consumed change — always check BEFORE consume().
-                val released = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id }
-                            ?: return@withTimeoutOrNull false
-                        val up = change.changedToUp()
-                        change.consume()
-                        if (up) return@withTimeoutOrNull true
-                    }
-                    @Suppress("UNREACHABLE_CODE") false
-                }
-                when {
-                    released == true -> onAction(KeyAction.Text(key.outputText(ui.uppercase)))
-                    released == null && popupCount == 0 -> {
-                        // Long hold with no alternatives: commit the key itself (as before).
-                        onAction(KeyAction.Text(key.outputText(ui.uppercase)))
+                try {
+                    currentOnKeyDown(sound)
+                    // Wait for release or the long-press timeout, whichever comes first.
+                    // true = released (tap) · false = pointer lost · null = still held (long press).
+                    // NB: changedToUp() is false on a consumed change — always check BEFORE consume().
+                    val released = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                         while (true) {
                             val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            val change = event.changes.firstOrNull { it.id == down.id }
+                                ?: return@withTimeoutOrNull false
                             val up = change.changedToUp()
                             change.consume()
-                            if (up) break
+                            if (up) return@withTimeoutOrNull true
                         }
+                        @Suppress("UNREACHABLE_CODE") false
                     }
-                    released == null -> {
-                        selectedAlt = 0
-                        popupOpen = true
-                        onAction(KeyAction.PopupOpened)
-                        val cell = POPUP_CELL.toPx()
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            val up = change.changedToUp()
-                            change.consume()
-                            if (up) {
-                                onAction(holdAction ?: KeyAction.Text(key.popup[selectedAlt]))
-                                break
+                    // The key and case are read at release, not press: a rollover press made
+                    // while the previous key was still shifted commits what the layout shows now.
+                    when {
+                        released == true ->
+                            currentOnAction(KeyAction.Text(currentKey.outputText(uppercase)))
+                        released == null && popupCountOf(currentKey) == 0 -> {
+                            // Long hold with no alternatives: commit the key itself (as before).
+                            currentOnAction(KeyAction.Text(currentKey.outputText(uppercase)))
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                val up = change.changedToUp()
+                                change.consume()
+                                if (up) break
                             }
-                            // Cells normally start at the key's left edge and extend rightward.
-                            // The last key in a row has no room to its right (screen edge), so its
-                            // popup instead anchors at the key's right edge and extends leftward —
-                            // mirror the sign so a left-swipe still advances the selection.
-                            val raw = if (popupExpandsLeft) -change.position.x else change.position.x
-                            selectedAlt = (raw / cell).toInt().coerceIn(0, popupCount - 1)
+                        }
+                        released == null -> {
+                            selectedAlt = 0
+                            popupOpen = true
+                            currentOnAction(KeyAction.PopupOpened)
+                            val cell = POPUP_CELL.toPx()
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                val up = change.changedToUp()
+                                change.consume()
+                                val k = currentKey
+                                if (up) {
+                                    // getOrNull: the layer may have changed under the open popup.
+                                    (holdActionOf(k) ?: k.popup.getOrNull(selectedAlt)?.let(KeyAction::Text))
+                                        ?.let(currentOnAction)
+                                    break
+                                }
+                                // Cells normally start at the key's left edge and extend rightward.
+                                // The last key in a row has no room to its right (screen edge), so
+                                // its popup instead anchors at the key's right edge and extends
+                                // leftward — mirror the sign so a left-swipe still advances the
+                                // selection.
+                                val raw = if (expandsLeft) -change.position.x else change.position.x
+                                selectedAlt = (raw / cell).toInt()
+                                    .coerceIn(0, (popupCountOf(k) - 1).coerceAtLeast(0))
+                            }
                         }
                     }
+                } finally {
+                    // Also on cancellation (key type changed under the finger): never leave the
+                    // key drawn pressed or its popup open.
+                    pressed = false
+                    popupOpen = false
                 }
-                pressed = false
-                popupOpen = false
             }
         }
-        KeyTypes.BACKSPACE -> Modifier.pointerInput(Unit) {
+        KeyTypes.BACKSPACE -> Modifier.pointerInput(key.type) {
             detectTapGestures(onPress = {
                 pressed = true
                 onKeyDown(sound)
@@ -417,14 +441,14 @@ private fun KeyView(
             })
         }
         KeyTypes.SPACE -> Modifier
-            .pointerInput(Unit) {
+            .pointerInput(key.type) {
                 detectTapGestures(
                     onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                     onTap = { onAction(KeyAction.Space) },
                     onLongPress = { onAction(KeyAction.ShowImePicker) },
                 )
             }
-            .pointerInput(Unit) {
+            .pointerInput(key.type) {
                 var dragged = 0f
                 detectHorizontalDragGestures(
                     onDragStart = { dragged = 0f },
@@ -434,31 +458,31 @@ private fun KeyView(
                     },
                 )
             }
-        KeyTypes.SHIFT -> Modifier.pointerInput(Unit) {
+        KeyTypes.SHIFT -> Modifier.pointerInput(key.type) {
             detectTapGestures(
                 onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                 onTap = { onAction(KeyAction.Shift) },
             )
         }
-        KeyTypes.ENTER -> Modifier.pointerInput(Unit) {
+        KeyTypes.ENTER -> Modifier.pointerInput(key.type) {
             detectTapGestures(
                 onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                 onTap = { onAction(KeyAction.Enter) },
             )
         }
-        KeyTypes.LAYER_SWITCH -> Modifier.pointerInput(key) {
+        KeyTypes.LAYER_SWITCH -> Modifier.pointerInput(key.type) {
             detectTapGestures(
                 onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
-                onTap = { key.target?.let { onAction(KeyAction.LayerSwitch(it)) } },
+                onTap = { currentKey.target?.let { onAction(KeyAction.LayerSwitch(it)) } },
             )
         }
-        KeyTypes.TAB -> Modifier.pointerInput(Unit) {
+        KeyTypes.TAB -> Modifier.pointerInput(key.type) {
             detectTapGestures(
                 onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                 onTap = { onAction(KeyAction.Text("\t")) },
             )
         }
-        KeyTypes.EMOJI -> Modifier.pointerInput(Unit) {
+        KeyTypes.EMOJI -> Modifier.pointerInput(key.type) {
             detectTapGestures(
                 onPress = { pressed = true; onKeyDown(sound); tryAwaitRelease(); pressed = false },
                 onTap = { onAction(KeyAction.ToggleEmoji) },
